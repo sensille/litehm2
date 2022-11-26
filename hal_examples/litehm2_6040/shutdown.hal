@@ -1,0 +1,14 @@
+# Include your shutdown HAL commands here
+# This file will not be overwritten when you run PNCconf again
+
+unlinkp mb2hal.cntrl.spindle
+unlinkp mb2hal.cntrl_source.00
+unlinkp mb2hal.cntrl_source.02
+
+#setp mb2hal.cntrl.spindle 0
+setp mb2hal.cntrl_source.00 0
+setp mb2hal.cntrl_source.02 0
+
+#unloadusr mb2hal
+#loadusr -W mb2hal config=e100.ini
+#unloadusr mb2hal

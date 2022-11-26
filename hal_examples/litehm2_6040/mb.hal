@@ -1,0 +1,3 @@
+loadusr -W mb2hal config=e100.ini
+
+
