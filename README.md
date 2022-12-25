@@ -148,15 +148,44 @@ mesact.
 
 ## Building
 
-TBD, in short: install litex (master version of liteeth), install ISE, get patch
-from sensille/litex litehm2 branch, modify board.conf, run make.
+To build the  project, you need the following prerequisites:
+- Litex (default setup)
+- Risc-v toolchain
+- Xilinx ISE 14.7
 
-### Installing LiteX
-### Get LiteX Patches
-### Install ISE 14.2
+At the time of this writing a small patch to Litex (core) is needed, you can
+find it [here](https://github.com/enjoy-digital/litex/pull/1540). Also make
+sure to get the master version of litex (core), as it contains a fix needed.
+
+To build, just type `make`. `./litehm2.py` only builds the SoC and generates
+the verilog files. The Makefile also conains a workaround for
+[#1502](https://github.com/enjoy-digital/litex/issues/1502).
+
+The resulting bitstream is copied to the bitstreams folder.
+
+Inside board.conf you can basically use all available hostmot2 modules,
+although currently only stepgen, pwm and gpio are implemented. To add more
+modules, just add the corresponding config lines to hostmot2.py or open an
+issue.
 
 ## Architecture
-### Memory Layout
+
+Litehm2 takes the original hostmot2-entity and integrates it into a SoC.
+The mesa-d16w CPU is replaced by a RISC-V cpu, vexriscv and the assembler
+code rewritten in C. This mainly implements the LPB16 protocol and rudimentary
+IP/UDP/ICMP/ARP.
+
+The SoC contains three memory areas.
+1. ROM: This contains the full firmware plus a serial loader code
+2. RAM: This area is normally left empty and is only used to hold a dynamically
+  loaded version of the firmware. Used for rapid development cycles.
+3. SRAM: RAM to be used by the firmware, be it from ROM or RAM.
+
+The RAM area could be ommitted in a future release version.
+
+## Contact
+
+You can reach me as *sensille* in #linuxcnc irc-chat on libera.chat.
 
 ## TODOs
 - [ ] add more boards
