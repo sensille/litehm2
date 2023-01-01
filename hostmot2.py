@@ -25,6 +25,9 @@ func_lines = {
     'qcount':
         '(QcountTag, x"02", ClockLowTag, x"{:02x}", QcounterAddr&PadT, '
             + 'QCounterNumRegs, x"00", QCounterMPBitMask)',
+    'inm':
+        '(InMTag, x"00", ClockLowTag, x"{:02x}", InMControlAddr&PadT, '
+            + 'InMNumRegs, x"00", InMMPBitMask)',
 }
 
 func_default_lines = [
@@ -56,12 +59,32 @@ pin_subfuncs = {
         'b': ['QCountQBPin', 'in'],
         'idx': ['QCountIDXPin', 'in'],
     },
+    'inm': {
+        'data0': ['InMData0Pin', 'in'],
+        'data1': ['InMData1Pin', 'in'],
+        'data2': ['InMData2Pin', 'in'],
+        'data3': ['InMData3Pin', 'in'],
+        'data4': ['InMData4Pin', 'in'],
+        'data5': ['InMData5Pin', 'in'],
+        'data6': ['InMData6Pin', 'in'],
+        'data7': ['InMData7Pin', 'in'],
+        'data8': ['InMData8Pin', 'in'],
+        'data9': ['InMData9Pin', 'in'],
+        'dataA': ['InMDataAPin', 'in'],
+        'dataB': ['InMDataBPin', 'in'],
+        'dataC': ['InMDataCPin', 'in'],
+        'dataD': ['InMDataDPin', 'in'],
+        'dataE': ['InMDataEPin', 'in'],
+        'dataF': ['InMDataFPin', 'in'],
+    },
 }
+
 pin_lines = {
     'stepgen': 'IOPortTag & x"{:02x}" & StepGenTag & {}',
     'pwm': 'IOPortTag & x"{:02x}" & PWMTag & {}',
     'gpio': 'IOPortTag & x"{:02x}" & NullTag & x"00"',
     'qcount': 'IOPortTag & x"{:02x}" & QCountTag & {}',
+    'inm': 'IOPortTag & x"{:02x}" & InMTag & {}',
 }
 
 consts_header = """
@@ -188,6 +211,7 @@ class HostMot2(Module, AutoCSR):
         # collect functions
         #
         funcs = {}
+        funccnt = {}
         for _, v in bpins.items():
             v = re.sub('^!', '', v)
             toks = v.split('.')
@@ -197,6 +221,8 @@ class HostMot2(Module, AutoCSR):
             ix = funcs.setdefault(toks[0], 0)
             if int(toks[1]) > ix:
                 funcs[toks[0]] = int(toks[1])
+            cntkey = toks[0] + '.' + toks[1]
+            funccnt[cntkey] = funccnt.get(cntkey, 0) + 1
 
         #
         # add JP4 header
@@ -299,8 +325,18 @@ class HostMot2(Module, AutoCSR):
             if n == 'gpio':
                 v = ioports - 1
             func_consts.append(line.format(v + 1))
-        for _ in range(len(func_consts), 32):
+        n_inm = funcs.get('inm')
+        n = 32 if n_inm is None else (31 - n_inm)
+        for _ in range(len(func_consts), n):
             func_consts.append(func_null_tag)
+        if n_inm is not None:
+            for i in range(n_inm + 1):
+                # need at least 8 for mpg to work
+                inm_width = max(funccnt["inm.{}".format(i)], 8)
+                func_consts.append(
+                    '(InMWidth{}Tag, x"00", NullTag, x"00", NullAddr&PadT, x"00", x"00", x"{:08x}")'
+                        .format(i, inm_width)
+                )
 
         for i in range(0, len(func_consts)):
             cout.write('\t' + func_consts[i])
