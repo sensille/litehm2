@@ -22,7 +22,10 @@ func_lines = {
             + 'IOPortNumRegs, x"00", IOPortMPBitMask)',
     'led':
         '(LEDTag, x"00", ClockLowTag, x"{:02x}", LEDAddr&PadT, '
-            + 'LEDNumRegs, x"00", LEDMPBitMask,',
+            + 'LEDNumRegs, x"00", LEDMPBitMask)',
+    'qcount':
+        '(QcountTag, x"02", ClockLowTag, x"{:02x}", QcounterAddr&PadT, '
+            + 'QCounterNumRegs, x"00", QCounterMPBitMask)',
 }
 
 func_default_lines = [
@@ -49,11 +52,17 @@ pin_subfuncs = {
         'in': ['', 'in'],
         'out': ['', 'out'],
     },
+    'qcount': {
+        'a': ['QCountQAPin', 'in'],
+        'b': ['QCountQBPin', 'in'],
+        'idx': ['QCountIDXPin', 'in'],
+    },
 }
 pin_lines = {
     'stepgen': 'IOPortTag & x"{:02x}" & StepGenTag & {}',
     'pwm': 'IOPortTag & x"{:02x}" & PWMTag & {}',
     'gpio': 'IOPortTag & x"{:02x}" & NullTag & x"00"',
+    'qcount': 'IOPortTag & x"{:02x}" & QCountTag & {}',
 }
 
 consts_header = """
