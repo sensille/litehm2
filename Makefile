@@ -1,4 +1,4 @@
-all: litehm2
+all: litehm2 bitstreams/initial.bin
 
 litehm2:
 	./litehm2.py
@@ -9,3 +9,7 @@ litehm2:
 	 sh build_litehm2.sh )
 	cp build/gateware/litehm2.bit bitstreams/
 	cp build/gateware/litehm2.bin bitstreams/
+
+bitstreams/initial.bin: bitstreams/litehm2.bin
+	dd if=/dev/zero of=bitstreams/initial.bin bs=4M count=1
+	dd if=bitstreams/litehm2.bin of=bitstreams/initial.bin conv=notrunc
