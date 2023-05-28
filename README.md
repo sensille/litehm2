@@ -157,12 +157,13 @@ To build the  project, you need the following prerequisites:
 - Risc-v toolchain
 - Xilinx ISE 14.7
 
-At the time of this writing a small patch to Litex (core) is needed, you can
-find it [here](https://github.com/enjoy-digital/litex/pull/1540). Also make
-sure to get the master version of litex (core), as it contains a fix needed.
+At the time of this writing a small patch to litex-boards is needed,
+you can find it [here](https://github.com/litex-hub/litex-boards/pull/506).
+Also make sure to get the master version of litex (core), as it contains a fix
+needed.
 
 To build, just type `make`. `./litehm2.py` only builds the SoC and generates
-the verilog files. The Makefile also conains a workaround for
+the verilog files. The Makefile also contains a workaround for
 [#1502](https://github.com/enjoy-digital/litex/issues/1502).
 
 The resulting bitstream is copied to the bitstreams folder.
