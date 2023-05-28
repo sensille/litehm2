@@ -6,7 +6,7 @@ to more boards. For maximum portability it is based on
 [Litex](https://github.com/enjoy-digital/litex) a framework to easily build SoC
 on FPGA boards.
 
-This first board we bring hostmot2 to is the linsn rv901t, a low cost board
+The first board we bring hostmot2 to is the linsn rv901t, a low cost board
 originally designed to control LEDs, but which is well suited to serve as
 a general I/O board. Information about the reverse engineered board can be found
 [here](https://github.com/q3k/chubby75/blob/master/rv901t/doc/hardware.md).
@@ -52,6 +52,10 @@ ftdi(2)232h-based modules using the 'divisor' option (see manpage of flashrom).
 
 The current version of flashrom does not recognize the onboard SPI flash.
 Nevertheless programming works.
+
+For initial programming bitstreams/initial.bin should be used. This is a
+padded version of litehm2.bin, as flashrom expects the file to be the same
+size as the flash to be programmed.
 
 #### Load bitstream via JTAG
 The other option is to do the JTAG hack as described
@@ -167,6 +171,18 @@ Inside board.conf you can basically use all available hostmot2 modules,
 although currently only stepgen, pwm and gpio are implemented. To add more
 modules, just add the corresponding config lines to hostmot2.py or open an
 issue.
+
+### Possible Issues
+
+Should you get during build an error like
+
+`ERROR: Could not detect Ninja v1.8.2 or newer`
+
+the problem can be that the Xilinx installation interferes with the sytem
+libraries. A workaround is to run make without the Xilinx paths in
+LD_LIBRARY_PATH. So call `LD_LIBRARY_PATH= make` for the first run,
+so meson can build the required files. After that running with the xilinx env
+should work.
 
 ## Architecture
 

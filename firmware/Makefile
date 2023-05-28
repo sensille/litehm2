@@ -16,7 +16,6 @@ all: firmware.bin loader.bin
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
 	chmod -x $@
-	cp $@ /data/arne/linuxcnc
 
 firmware.elf: $(F_OBJS)
 	$(CC) $(LDFLAGS) \

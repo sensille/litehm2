@@ -68,7 +68,6 @@ class LiteHM2(SoCCore):
         if with_bios:
             SoCCore.__init__(self, platform,
                 clk_freq = sys_clk_freq,
-                #cpu_variant = "lite",
                 cpu_variant = "minimal",
                 integrated_rom_size = 0x8000,
                 integrated_sram_size = 0x1000,
@@ -147,32 +146,17 @@ class LiteHM2(SoCCore):
 def main():
     parser = argparse.ArgumentParser(description=
         "Take control of your ColorLight FPGA board with LiteX/LiteEth :)")
-    parser.add_argument("--build", action="store_true", help="Build bitstream")
-    parser.add_argument("--load", action="store_true", help="Load bitstream")
-    parser.add_argument("--flash",action="store_true", help="Flash bitstream")
     parser.add_argument("--ip-address", default="10.10.10.10",
         help="Ethernet IP address of the board (default: 10.10.10.10).")
     parser.add_argument("--mac-address", default="0x726b895bc2e2",
-        help="Ethernet MAC address of the board (defaullt: 0x726b895bc2e2).")
+        help="Ethernet MAC address of the board (default: 0x726b895bc2e2).")
+
     args = parser.parse_args()
 
     soc = LiteHM2(ip_address=args.ip_address,
         mac_address=int(args.mac_address, 0))
     builder = Builder(soc, output_dir="build", csr_csv="scripts/csr.csv")
-    builder.build(build_name="litehm2", run=args.build)
-
-    if args.load:
-        prog = soc.platform.create_programmer()
-        prog.load_bitstream(os.path.join(builder.gateware_dir,
-            soc.build_name + ".svf"))
-
-    if args.flash:
-        prog = soc.platform.create_programmer()
-        os.system("cp bit_to_flash.py build/gateware/")
-        os.system("cd build/gateware && ./bit_to_flash.py litehm2.bit " +
-            "litehm2.svf.flash")
-        prog.load_bitstream(os.path.join(builder.gateware_dir,
-            soc.build_name + ".svf.flash"))
+    builder.build(build_name="litehm2", run=False)
 
 if __name__ == "__main__":
     main()
