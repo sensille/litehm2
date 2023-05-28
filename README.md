@@ -44,7 +44,7 @@ an ftdi ft2232h or ft232h based board.
 
 As the SPI header (JP5) has only 2mm spacing, common connectors do not fit.
 An easy option is to use Dupont-style jumper cables and remove every other
-one from its housing (*TODO: add picture*).
+one from its housing [(example)](doc/spi_conn.jpg).
 
 Make sure to connect PROG_B to GND. This instructs the FPGA to release its
 SPI interface. You probably also have to reduce the clock rate when using
@@ -66,6 +66,23 @@ openFPGAloader can also be used to program the flash with --write-flash
 (untested).
 Otherwise you can use mesaflash to do the programming once the bitstream
 is loaded.
+
+### Fallback bitstream
+
+After initial programming mesaflash can be used to write a fallback bitstream
+to the board. First, the fallback-boot header needs to be written:
+
+`mesaflash  --addr 10.10.10.10 --device ether --write bitstreams/litehm2.bit --fix-boot-block`
+
+Then the fallback stream can be programmed.
+
+`mesaflash  --addr 10.10.10.10 --device ether --write bitstreams/litehm2.bit --fallback`
+
+### Updates
+
+Regular updates can be done with
+
+`mesaflash  --addr 10.10.10.10 --device ether --write bitstreams/litehm2.bit`
 
 ### Board Modification
 
@@ -126,7 +143,10 @@ Currently hm2_eth sends a burst of messages on startup which overwhelm the
 rv901t due to its gbit interface. To mitigate this, pull commit 
 [2afcf903](https://github.com/sensille/linuxcnc/commit/2afcf90342952e91802584218dcccc0c858b9319)
 from [sensille/linuxcnc-litehm2](https://github.com/sensille/linuxcnc/tree/litehm2-2.8.4)
-and rebuild linuxcnc according to
+or build linuxcnc from master. The patch is merged and will probably be part of
+the 2.10 release.
+
+Then rebuild linuxcnc according to
 [building linuxcnc](http://linuxcnc.org/docs/master/html/code/building-linuxcnc.html).
 
 ### Mesaflash Patches
@@ -138,6 +158,9 @@ supported, after flashing a new firmware a power cycle is necessary.
 
 Build mesaflash from 
 [sensille/mesaflash-litehm2](https://github.com/sensille/mesaflash/tree/litehm2).
+
+A [pull request](https://github.com/LinuxCNC/mesaflash/pull/76) has also been
+submitted.
 
 ### Example HAL File
 
