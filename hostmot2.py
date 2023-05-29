@@ -121,6 +121,8 @@ class HostMot2(Module, AutoCSR):
         #
         aliases = {}
         apins = {}
+        board = 'rv901t'
+        driver_direction = 'input'
         cfg = open(config, 'r')
         for line in cfg:
             line = re.sub('#.*$', '', line)
@@ -142,6 +144,21 @@ class HostMot2(Module, AutoCSR):
                     apins[toks[1]] = toks[2]
                 else:
                     apins[toks[1]] = 'gpio.0'
+            elif toks[0] == 'board':
+                if len(toks) != 2:
+                    raise ValueError("parsing board config fails, line {}"
+                        .format(line))
+                if toks[1] != 'rv901t':
+                    raise ValueError("unknown board {}".format(toks[1]))
+                board = toks[1]
+            elif toks[0] == 'driver_direction':
+                if len(toks) != 2:
+                    raise ValueError("parsing board config fails, line {}"
+                        .format(line))
+                if toks[1] not in ['input', 'output']:
+                    raise ValueError("invalid driver direction, only 'input'" +
+                        " and 'output are valid")
+                driver_direction = toks[1]
             else:
                 raise ValueError("parsing board config failed, unknown token {}"
                     .format(toks[0]))
@@ -302,7 +319,10 @@ class HostMot2(Module, AutoCSR):
 
         # set to input
         bufdir = platform.request("bufdir")
-        self.comb += bufdir.eq(1)
+        if driver_direction == 'input':
+            self.comb += bufdir.eq(1)
+        else:
+            self.comb += bufdir.eq(0)
 
         # on 7i92: clklow, clkmed: 100MHz (procclock)
         #          clkhigh: 200MHz (clk1fx -> BUFG -> hs2fastclock)
