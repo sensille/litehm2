@@ -108,7 +108,7 @@ end package consts_gen;
 
 class HostMot2(Module, AutoCSR):
     def __init__(self, soc, sys_clk_freq, fast_clk_freq, with_leds=False,
-            config='board.conf'):
+            config='board.conf', builddir='build'):
         platform = soc.platform
 
         leds = 1
@@ -242,7 +242,7 @@ class HostMot2(Module, AutoCSR):
         for _ in range(npins, 144):
             pin_consts.append("emptypin")
 
-        cout = open('consts_gen.vhd', 'w')
+        cout = open(builddir + '/consts_gen.vhd', 'w')
         cout.write(consts_header.format(
             fast_clk = int(fast_clk_freq),
             sys_clk = int(sys_clk_freq),
@@ -326,7 +326,7 @@ class HostMot2(Module, AutoCSR):
         )
 
         platform.add_source_dir(path="hostmot2/")
-        platform.add_source("consts_gen.vhd")
+        platform.add_source(builddir + "/consts_gen.vhd")
         platform.add_source("hostmot2_top.vhd")
 
         hm2bus = wishbone.Interface(soc.bus.data_width)

@@ -1,5 +1,2 @@
-firmware/*.d
-firmware/*.o
-firmware/firmware.elf
 build
 __pycache__

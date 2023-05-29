@@ -1,14 +1,14 @@
-BUILD_DIR=../build/
+OUTPUT_DIR=$(BUILD_DIR)/firmware
 
 include $(BUILD_DIR)/software/include/generated/variables.mak
 include $(SOC_DIRECTORY)/software/common.mak
 
-L_OBJS=crt0.o isr.o loader.o boot-helper.o flash.o tryload.o
-F_OBJS=crt0.o isr.o main.o hostmot2.o flash.o util.o boot-helper.o eth.o
+L_OBJS=$(addprefix $(OUTPUT_DIR)/,crt0.o isr.o loader.o boot-helper.o flash.o tryload.o)
+F_OBJS=$(addprefix $(OUTPUT_DIR)/,crt0.o isr.o main.o hostmot2.o flash.o util.o boot-helper.o eth.o)
 OBJECTS=$(L_OBJS) $(F_OBJS)
 
 
-all: firmware.bin loader.bin
+all: $(OUTPUT_DIR)/firmware.bin $(OUTPUT_DIR)/loader.bin
 
 # pull in dependency info for *existing* .o files
 -include $(OBJECTS:.o=.d)
@@ -17,7 +17,7 @@ all: firmware.bin loader.bin
 	$(OBJCOPY) -O binary $< $@
 	chmod -x $@
 
-firmware.elf: $(F_OBJS)
+$(OUTPUT_DIR)/firmware.elf: $(F_OBJS)
 	$(CC) $(LDFLAGS) \
 		-T linker-fw.ld \
 		-N -o $@ \
@@ -26,7 +26,7 @@ firmware.elf: $(F_OBJS)
 		$(LIBS:lib%=-l%) -lbase -lcompiler_rt -llitespi
 	chmod -x $@
 
-loader.elf: $(L_OBJS)
+$(OUTPUT_DIR)/loader.elf: $(L_OBJS)
 	$(CC) $(LDFLAGS) \
 		-T linker-ld.ld \
 		-N -o $@ \
@@ -35,22 +35,29 @@ loader.elf: $(L_OBJS)
 		$(LIBS:lib%=-l%) -lbase -lcompiler_rt
 	chmod -x $@
 
-main.o: main.c
+$(OUTPUT_DIR)/main.o: main.c
 	$(compile)
 
-crt0.o: $(CPU_DIRECTORY)/crt0.S
+$(OUTPUT_DIR)/crt0.o: $(CPU_DIRECTORY)/crt0.S
 	$(assemble)
 
-boot-helper.o: $(CPU_DIRECTORY)/boot-helper.S
-	$(assemble)
-
-%.o: %.c
+$(OUTPUT_DIR)/boot-helper.o: $(CPU_DIRECTORY)/boot-helper.S
 	$(compile)
 
-%.o: %.S
+$(OUTPUT_DIR)/%.o: %.c
+	$(compile)
+
+$(OUTPUT_DIR)/%.o: %.S
 	$(assemble)
 
 clean:
-	$(RM) $(OBJECTS) $(OBJECTS:.o=.d) firmware.elf firmware.bin .*~ *~
+	$(RM) $(OBJECTS) $(OBJECTS:.o=.d) $(OUTPUT_DIR)/firmware.elf
+	$(RM) $(OUTPUT_DIR)/firmware.bin $(OUTPUT_DIR)/loader.bin
+	$(RM) $(OUTPUT_DIR)/loader.elf .*~ *~
 
-.PHONY: all main.o clean load
+.PHONY: all $(OUTPUT_DIR)/main.o clean load
+
+# compile
+# $(CC) -c $(CFLAGS) $(1) $< -o $(OUTPUT_DIR)/$@
+# assemble
+# $(CC) -c $(CFLAGS) -o $(OUTPUT_DIR)/$@ $<

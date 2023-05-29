@@ -1,0 +1,22 @@
+TARGET=rv901t
+BUILD=build/$(TARGET)
+CONF=configs/$(TARGET).conf
+
+all: litehm2
+
+litehm2: $(BUILD)/firmware
+	dd if=/dev/zero of=$(BUILD)/firmware/firmware.bin bs=32k count=1
+	dd if=/dev/zero of=$(BUILD)/firmware/loader.bin bs=4k count=1
+	./litehm2.py --builddir=$(BUILD) --config=$(CONF)
+	(cd firmware; make BUILD_DIR=../$(BUILD))
+	./litehm2.py --builddir=$(BUILD) --config=$(CONF)
+	(cd $(BUILD)/gateware; \
+	 sed -i -e 's/eth_tx_clk/eth_rx_clk/g' litehm2.ucf; \
+	 sh build_litehm2.sh )
+	cp $(BUILD)/gateware/litehm2.bit bitstreams/$(TARGET).bit
+	cp $(BUILD)/gateware/litehm2.bin bitstreams/$(TARGET).bin
+	dd if=/dev/zero of=bitstreams/$(TARGET)_initial.bin bs=4M count=1
+	dd if=$(BUILD)/gateware/litehm2.bin of=bitstreams/$(TARGET)_initial.bin conv=notrunc
+
+$(BUILD)/firmware:
+	mkdir -p $(BUILD)/firmware

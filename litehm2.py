@@ -48,7 +48,8 @@ class _CRG(Module):
 
 class LiteHM2(SoCCore):
     def __init__(self, sys_clk_freq=int(40e6), with_etherbone=True,
-            ip_address=None, mac_address=None, with_bios=False):
+            ip_address=None, mac_address=None, with_bios=False,
+            builddir="build", config="board.conf"):
 
         sys_clk_freq = 100e6
         fast_clk_freq = 200e6
@@ -74,7 +75,7 @@ class LiteHM2(SoCCore):
                 integrated_main_ram_size = 0x3000,
             )
         else:
-            main_ram_init = get_mem_data("firmware/firmware.bin",
+            main_ram_init = get_mem_data(builddir + "/firmware/firmware.bin",
                 endianness = "little", # FIXME: Depends on CPU.
                 data_width = 32,       # FIXME: Depends on CPU.
             )
@@ -83,7 +84,7 @@ class LiteHM2(SoCCore):
                 #cpu_variant = "lite",
                 cpu_variant = "minimal",
                 integrated_rom_size = 0x1000,
-                integrated_rom_init = "firmware/loader.bin",
+                integrated_rom_init = builddir + "/firmware/loader.bin",
                 integrated_sram_size = 0x1000,
                 integrated_main_ram_size = 0x4000,
                 integrated_main_ram_init = main_ram_init,
@@ -139,7 +140,8 @@ class LiteHM2(SoCCore):
 
         if with_hostmot2:
             self.submodules.hostmot2 = hostmot2 = HostMot2(self,
-                sys_clk_freq, fast_clk_freq, with_leds)
+                sys_clk_freq, fast_clk_freq, with_leds, builddir=builddir,
+                config=config)
 
 # Build ----------------------------------------------------------------------
 
@@ -150,12 +152,18 @@ def main():
         help="Ethernet IP address of the board (default: 10.10.10.10).")
     parser.add_argument("--mac-address", default="0x726b895bc2e2",
         help="Ethernet MAC address of the board (default: 0x726b895bc2e2).")
+    parser.add_argument("--builddir", default="build",
+        help="Build directory (default: build).")
+    parser.add_argument("--config", default="board.conf",
+        help="Board config file (default: board.conf).")
 
     args = parser.parse_args()
+    builddir = args.builddir;
 
     soc = LiteHM2(ip_address=args.ip_address,
-        mac_address=int(args.mac_address, 0))
-    builder = Builder(soc, output_dir="build", csr_csv="scripts/csr.csv")
+        mac_address=int(args.mac_address, 0), builddir=builddir,
+        config=args.config)
+    builder = Builder(soc, output_dir=builddir, csr_csv=builddir + "/csr.csv")
     builder.build(build_name="litehm2", run=False)
 
 if __name__ == "__main__":
