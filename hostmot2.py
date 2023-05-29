@@ -108,7 +108,7 @@ end package consts_gen;
 
 class HostMot2(Module, AutoCSR):
     def __init__(self, soc, sys_clk_freq, fast_clk_freq, with_leds=False,
-            config='board.conf'):
+            config='board.conf', builddir='build'):
         platform = soc.platform
 
         leds = 1
@@ -121,6 +121,8 @@ class HostMot2(Module, AutoCSR):
         #
         aliases = {}
         apins = {}
+        board = 'rv901t'
+        driver_direction = 'input'
         cfg = open(config, 'r')
         for line in cfg:
             line = re.sub('#.*$', '', line)
@@ -142,6 +144,21 @@ class HostMot2(Module, AutoCSR):
                     apins[toks[1]] = toks[2]
                 else:
                     apins[toks[1]] = 'gpio.0'
+            elif toks[0] == 'board':
+                if len(toks) != 2:
+                    raise ValueError("parsing board config fails, line {}"
+                        .format(line))
+                if toks[1] != 'rv901t':
+                    raise ValueError("unknown board {}".format(toks[1]))
+                board = toks[1]
+            elif toks[0] == 'driver_direction':
+                if len(toks) != 2:
+                    raise ValueError("parsing board config fails, line {}"
+                        .format(line))
+                if toks[1] not in ['input', 'output']:
+                    raise ValueError("invalid driver direction, only 'input'" +
+                        " and 'output are valid")
+                driver_direction = toks[1]
             else:
                 raise ValueError("parsing board config failed, unknown token {}"
                     .format(toks[0]))
@@ -242,7 +259,7 @@ class HostMot2(Module, AutoCSR):
         for _ in range(npins, 144):
             pin_consts.append("emptypin")
 
-        cout = open('consts_gen.vhd', 'w')
+        cout = open(builddir + '/consts_gen.vhd', 'w')
         cout.write(consts_header.format(
             fast_clk = int(fast_clk_freq),
             sys_clk = int(sys_clk_freq),
@@ -302,7 +319,10 @@ class HostMot2(Module, AutoCSR):
 
         # set to input
         bufdir = platform.request("bufdir")
-        self.comb += bufdir.eq(1)
+        if driver_direction == 'input':
+            self.comb += bufdir.eq(1)
+        else:
+            self.comb += bufdir.eq(0)
 
         # on 7i92: clklow, clkmed: 100MHz (procclock)
         #          clkhigh: 200MHz (clk1fx -> BUFG -> hs2fastclock)
@@ -326,7 +346,7 @@ class HostMot2(Module, AutoCSR):
         )
 
         platform.add_source_dir(path="hostmot2/")
-        platform.add_source("consts_gen.vhd")
+        platform.add_source(builddir + "/consts_gen.vhd")
         platform.add_source("hostmot2_top.vhd")
 
         hm2bus = wishbone.Interface(soc.bus.data_width)
