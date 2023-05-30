@@ -66,6 +66,16 @@ class LiteHM2(SoCCore):
 
         self.submodules.crg = _CRG(platform, sys_clk_freq, fast_clk_freq)
 
+        # check config file if we have to omit the serial port
+        uart_name = 'serial'
+        cfg = open(config, 'r')
+        for line in cfg:
+            line = re.sub('#.*$', '', line)
+            line = line.rstrip()
+            line = line.lstrip()
+            if (line == 'serial no'):
+                uart_name = 'stub'
+
         if with_bios:
             SoCCore.__init__(self, platform,
                 clk_freq = sys_clk_freq,
@@ -88,6 +98,7 @@ class LiteHM2(SoCCore):
                 integrated_sram_size = 0x1000,
                 integrated_main_ram_size = 0x4000,
                 integrated_main_ram_init = main_ram_init,
+                uart_name = uart_name,
             )
 
         if with_litescope:

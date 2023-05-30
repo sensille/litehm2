@@ -123,6 +123,7 @@ class HostMot2(Module, AutoCSR):
         apins = {}
         board = 'rv901t'
         driver_direction = 'input'
+        serial = 'yes'
         cfg = open(config, 'r')
         for line in cfg:
             line = re.sub('#.*$', '', line)
@@ -157,8 +158,16 @@ class HostMot2(Module, AutoCSR):
                         .format(line))
                 if toks[1] not in ['input', 'output']:
                     raise ValueError("invalid driver direction, only 'input'" +
-                        " and 'output are valid")
+                        " and 'output' are valid")
                 driver_direction = toks[1]
+            elif toks[0] == 'serial':
+                if len(toks) != 2:
+                    raise ValueError("parsing board config fails, line {}"
+                        .format(line))
+                if toks[1] not in ['no', 'yes']:
+                    raise ValueError("invalid serial directive, only 'no'" +
+                        " and 'yes' are valid")
+                serial = toks[1]
             else:
                 raise ValueError("parsing board config failed, unknown token {}"
                     .format(toks[0]))
@@ -200,6 +209,24 @@ class HostMot2(Module, AutoCSR):
             func_consts.append(line.format(v + 1))
         for _ in range(len(func_consts), 32):
             func_consts.append(func_null_tag)
+
+        #
+        # add JP4 header
+        #
+        if serial == 'no':
+            platform.add_connector(("J4", {
+                3: "H5",
+                4: "G5",
+                5: "G6",
+                6: "F5",
+                7: "F12",
+                8: "F6",
+            }))
+        else:
+            platform.add_connector(("J4", {
+                7: "F12",
+                8: "F6",
+            }))
 
         #
         # build pin assignments
