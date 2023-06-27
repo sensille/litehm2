@@ -16,9 +16,8 @@ func_lines = {
     'pwm':
 	'(PWMTag, x"00", ClockHighTag, x"{:02x}", PWMValAddr&PadT, '
             + 'PWMNumRegs, x"00", PWMMPBitMask)',
-    # XXX render number of ports into here
     'gpio':
-	'(IOPortTag, x"00", ClockLowTag, x"03", PortAddr&PadT, '
+	'(IOPortTag, x"00", ClockLowTag, x"{:02x}", PortAddr&PadT, '
             + 'IOPortNumRegs, x"00", IOPortMPBitMask)',
     'led':
         '(LEDTag, x"00", ClockLowTag, x"{:02x}", LEDAddr&PadT, '
@@ -83,9 +82,9 @@ constant BoardNameLow : std_Logic_Vector(31 downto 0) := BoardNameMESA;
 constant BoardNameHigh : std_Logic_Vector(31 downto 0) := BoardNameLHM2;
 constant FPGASize: integer := 16;
 constant FPGAPins: integer := 144;
-constant IOPorts: integer := 3;
-constant IOWidth: integer := 72;
-constant PortWidth: integer := 24;
+constant IOPorts: integer := {ioports};
+constant IOWidth: integer := {iowidth};
+constant PortWidth: integer := {portwidth};
 constant LIOWidth: integer := 0;
 constant LEDCount: integer := 1;
 constant SepClocks: boolean := true;
@@ -142,6 +141,9 @@ class HostMot2(Module, AutoCSR):
                     raise ValueError("parsing board config fails, line {}"
                         .format(line))
                 if len(toks) == 3:
+                    if apins.get(toks[1]) is not None:
+                        raise ValueError("parsing board config fails, pin " +
+                            "{} used more than once".format(toks[1]))
                     apins[toks[1]] = toks[2]
                 else:
                     apins[toks[1]] = 'gpio.0'
@@ -195,20 +197,6 @@ class HostMot2(Module, AutoCSR):
             ix = funcs.setdefault(toks[0], 0)
             if int(toks[1]) > ix:
                 funcs[toks[0]] = int(toks[1])
-
-        #
-        # build consts output
-        #
-        func_consts = func_default_lines
-        for n, v in funcs.items():
-            line = func_lines.get(n)
-            if line is None:
-                raise ValueError(
-                    "parsing board config fails, unknown function {}"
-                    .format(n))
-            func_consts.append(line.format(v + 1))
-        for _ in range(len(func_consts), 32):
-            func_consts.append(func_null_tag)
 
         #
         # add JP4 header
@@ -286,11 +274,33 @@ class HostMot2(Module, AutoCSR):
         for _ in range(npins, 144):
             pin_consts.append("emptypin")
 
+        # valid port widths: 17, 19, 21, 24, 27, 29, 30, 32
+        ioports, portwidth = calc_ports(npins)
+        iowidth = ioports * portwidth
         cout = open(builddir + '/consts_gen.vhd', 'w')
         cout.write(consts_header.format(
             fast_clk = int(fast_clk_freq),
             sys_clk = int(sys_clk_freq),
-            npins = npins))
+            ioports = int(ioports),
+            portwidth = int(portwidth),
+            iowidth = int(iowidth),
+        ))
+
+        #
+        # build consts output
+        #
+        func_consts = func_default_lines
+        for n, v in funcs.items():
+            line = func_lines.get(n)
+            if line is None:
+                raise ValueError(
+                    "parsing board config fails, unknown function {}"
+                    .format(n))
+            if n == 'gpio':
+                v = ioports - 1
+            func_consts.append(line.format(v + 1))
+        for _ in range(len(func_consts), 32):
+            func_consts.append(func_null_tag)
 
         for i in range(0, len(func_consts)):
             cout.write('\t' + func_consts[i])
@@ -427,3 +437,21 @@ class HostMot2(Module, AutoCSR):
         self.rates = CSRStatus(len(hm2_rates),
             description="HostMot2 htimer output")
         self.comb += self.rates.status.eq(hm2_rates)
+
+def calc_ports(npins):
+    valid_widths = [17, 19, 21, 24, 27, 29, 30, 32]
+    best_n = None
+    best_w = None
+
+    for n in range(1, 9):
+        for w in valid_widths:
+            if n * w >= npins and (best_n is None
+                    or n * w < best_n * best_w):
+                best_n = n
+                best_w = w
+
+    if best_n * best_w != npins:
+        raise ValueError(("invalid number of pins. Have {} pins. Best match" +
+            " would be {} pins.").format(npins, best_n * best_w))
+
+    return best_n, best_w
