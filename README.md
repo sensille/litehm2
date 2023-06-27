@@ -101,8 +101,8 @@ of the unpopulated resistors, on the side closer to the drivers.
 
 ![board mod](doc/board_mod.jpg)
 
-*TODO: the documentation is somewhat inconclusive regarding the shared pins.
-Some are marked as shared, but give different driver outputs. check.*
+Two easier ways to modify the board are described in
+[this post](https://forum.linuxcnc.org/27-driver-boards/47730-new-project-litehm2-a-hostmot2-port-to-linsn-rv901t?start=30#272597) by Ilya Koubatkin.
 
 ### Example Breakout Board
 
