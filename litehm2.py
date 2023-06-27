@@ -132,6 +132,7 @@ class LiteHM2(SoCCore):
                 data_width  = 32,
                 ntxslots    = 2,
                 nrxslots    = 8,
+                tx_write_only = True,
                 with_timestamp = True,
             )
         if with_etherbone:
