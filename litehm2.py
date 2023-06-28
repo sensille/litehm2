@@ -51,7 +51,7 @@ class LiteHM2(SoCCore):
             ip_address=None, mac_address=None, with_bios=False,
             builddir="build", config="board.conf"):
 
-        sys_clk_freq = 100e6
+        sys_clk_freq = 80e6
         fast_clk_freq = 200e6
         with_bios = False
         with_ethernet = True
