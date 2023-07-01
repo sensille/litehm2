@@ -45,6 +45,12 @@ class _CRG(Module):
         pll.register_clkin(clk25, 25e6)
         pll.create_clkout(self.cd_sys, sys_clk_freq)
         pll.create_clkout(self.cd_fast, fast_clk_freq)
+        platform.add_false_path_constraint(self.cd_sys.clk, self.cd_fast.clk)
+        platform.add_false_path_constraint(self.cd_fast.clk, self.cd_sys.clk)
+        platform.add_false_path_constraint(self.cd_sys.clk, clk25)
+        platform.add_false_path_constraint(clk25, self.cd_sys.clk)
+        platform.add_false_path_constraint(self.cd_fast.clk, clk25)
+        platform.add_false_path_constraint(clk25, self.cd_fast.clk)
 
 class LiteHM2(SoCCore):
     def __init__(self, sys_clk_freq=int(40e6), with_etherbone=True,
