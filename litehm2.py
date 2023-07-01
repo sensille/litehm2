@@ -147,6 +147,19 @@ class LiteHM2(SoCCore):
             self.add_spi_flash(mode="1x", module=W25Q32(Codes.READ_1_1_1),
                 clk_freq=50e6)
 
+        #
+        # set spi flash /wp and /hold to input with weak pullup
+        # there might be a better way to do it
+        #
+        platform.add_extension([
+            ("unused_spi", 0,
+                Subsignal("wp", Pins("N12"), Misc("PULLUP")),
+                Subsignal("hold", Pins("P12"), Misc("PULLUP")),
+                IOStandard("LVCMOS33"),
+            ),
+        ])
+        unused = platform.request("unused_spi", 0)
+
         if with_uartbone:
             self.add_uartbone(name = "serial", baudrate=115200)
 
