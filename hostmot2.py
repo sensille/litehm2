@@ -28,6 +28,9 @@ func_lines = {
     'inm':
         '(InMTag, x"00", ClockLowTag, x"{:02x}", InMControlAddr&PadT, '
             + 'InMNumRegs, x"00", InMMPBitMask)',
+    'inmux':
+        '(InMuxTag, x"00", ClockLowTag, x"{:02x}", InMuxControlAddr&PadT, '
+            + 'InMuxNumRegs, x"00", InmuxMPBitMask)',
 }
 
 func_default_lines = [
@@ -77,6 +80,14 @@ pin_subfuncs = {
         'dataE': ['InMDataEPin', 'in'],
         'dataF': ['InMDataFPin', 'in'],
     },
+    'inmux': {
+        'data': ['InMuxDataPin', 'in'],
+        'addr0': ['InMuxAddr0Pin', 'in'],
+        'addr1': ['InMuxAddr1Pin', 'in'],
+        'addr2': ['InMuxAddr2Pin', 'in'],
+        'addr3': ['InMuxAddr3Pin', 'in'],
+        'addr4': ['InMuxAddr4Pin', 'in'],
+    },
 }
 
 pin_lines = {
@@ -85,6 +96,7 @@ pin_lines = {
     'gpio': 'IOPortTag & x"{:02x}" & NullTag & x"00"',
     'qcount': 'IOPortTag & x"{:02x}" & QCountTag & {}',
     'inm': 'IOPortTag & x"{:02x}" & InMTag & {}',
+    'inmux': 'IOPortTag & x"{:02x}" & InMuxTag & {}',
 }
 
 consts_header = """
@@ -326,7 +338,12 @@ class HostMot2(Module, AutoCSR):
                 v = ioports - 1
             func_consts.append(line.format(v + 1))
         n_inm = funcs.get('inm')
-        n = 32 if n_inm is None else (31 - n_inm)
+        n_inmux = funcs.get('inmux')
+        n = 32
+        if n_inm is not None:
+            n -= n_inm + 1
+        if n_inmux is not None:
+            n -= n_inmux + 1
         for _ in range(len(func_consts), n):
             func_consts.append(func_null_tag)
         if n_inm is not None:
@@ -336,6 +353,12 @@ class HostMot2(Module, AutoCSR):
                 func_consts.append(
                     '(InMWidth{}Tag, x"00", NullTag, x"00", NullAddr&PadT, x"00", x"00", x"{:08x}")'
                         .format(i, inm_width)
+                )
+        if n_inmux is not None:
+            for i in range(n_inmux + 1):
+                func_consts.append(
+                    '(InMuxWidth{}Tag, x"00", NullTag, x"00", NullAddr&PadT, x"00", x"00", x"{:08x}")'
+                        .format(i, 32)
                 )
 
         for i in range(0, len(func_consts)):
