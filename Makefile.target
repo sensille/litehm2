@@ -17,6 +17,8 @@ litehm2: $(BUILD)/firmware
 	cp $(BUILD)/gateware/litehm2.bin bitstreams/$(TARGET).bin
 	dd if=/dev/zero of=bitstreams/$(TARGET)_initial.bin bs=4M count=1
 	dd if=$(BUILD)/gateware/litehm2.bin of=bitstreams/$(TARGET)_initial.bin conv=notrunc
+	tar zcf bitstreams/$(TARGET).tgz bitstreams/$(TARGET).bit bitstreams/$(TARGET).bin \
+		bitstreams/$(TARGET)_initial.bin
 
 $(BUILD)/firmware:
 	mkdir -p $(BUILD)/firmware
