@@ -31,6 +31,9 @@ func_lines = {
     'inmux':
         '(InMuxTag, x"00", ClockLowTag, x"{:02x}", InMuxControlAddr&PadT, '
             + 'InMuxNumRegs, x"00", InmuxMPBitMask)',
+    'sserial':
+        '(SSerialTag, x"00", ClockLowTag, x"{:02x}", SSerialCommandAddr&PadT, '
+            + 'SSerialNumRegs, x"10", SSerialMPBitMask)',
 }
 
 func_default_lines = [
@@ -88,6 +91,68 @@ pin_subfuncs = {
         'addr3': ['InMuxAddr3Pin', 'in'],
         'addr4': ['InMuxAddr4Pin', 'in'],
     },
+    'sserial': {
+        'tx0en': ['SSerialTxEn0Pin', 'in'],
+        'tx1en': ['SSerialTxEn1Pin', 'in'],
+        'tx2en': ['SSerialTxEn2Pin', 'in'],
+        'tx3en': ['SSerialTxEn3Pin', 'in'],
+        'tx4en': ['SSerialTxEn4Pin', 'in'],
+        'tx5en': ['SSerialTxEn5Pin', 'in'],
+        'tx6en': ['SSerialTxEn6Pin', 'in'],
+        'tx7en': ['SSerialTxEn7Pin', 'in'],
+        'tx8en': ['SSerialTxEn8Pin', 'in'],
+        'tx9en': ['SSerialTxEn9Pin', 'in'],
+        'txaen': ['SSerialTxEnAPin', 'in'],
+        'txben': ['SSerialTxEnBPin', 'in'],
+        'txcen': ['SSerialTxEnCPin', 'in'],
+        'txden': ['SSerialTxEnDPin', 'in'],
+        'txeen': ['SSerialTxEnEPin', 'in'],
+        'ntx0en': ['SSerialNTxEn0Pin', 'in'],
+        'ntx1en': ['SSerialNTxEn1Pin', 'in'],
+        'ntx2en': ['SSerialNTxEn2Pin', 'in'],
+        'ntx3en': ['SSerialNTxEn3Pin', 'in'],
+        'ntx4en': ['SSerialNTxEn4Pin', 'in'],
+        'ntx5en': ['SSerialNTxEn5Pin', 'in'],
+        'ntx6en': ['SSerialNTxEn6Pin', 'in'],
+        'ntx7en': ['SSerialNTxEn7Pin', 'in'],
+        'ntx8en': ['SSerialNTxEn8Pin', 'in'],
+        'ntx9en': ['SSerialNTxEn9Pin', 'in'],
+        'ntxaen': ['SSerialNTxEnAPin', 'in'],
+        'ntxben': ['SSerialNTxEnBPin', 'in'],
+        'ntxcen': ['SSerialNTxEnCPin', 'in'],
+        'ntxden': ['SSerialNTxEnDPin', 'in'],
+        'ntxeen': ['SSerialNTxEnEPin', 'in'],
+        'tx0': ['SSerialTx0Pin', 'out'],
+        'tx1': ['SSerialTx1Pin', 'out'],
+        'tx2': ['SSerialTx2Pin', 'out'],
+        'tx3': ['SSerialTx3Pin', 'out'],
+        'tx4': ['SSerialTx4Pin', 'out'],
+        'tx5': ['SSerialTx5Pin', 'out'],
+        'tx6': ['SSerialTx6Pin', 'out'],
+        'tx7': ['SSerialTx7Pin', 'out'],
+        'tx8': ['SSerialTx8Pin', 'out'],
+        'tx9': ['SSerialTx9Pin', 'out'],
+        'txa': ['SSerialTxAPin', 'out'],
+        'txb': ['SSerialTxBPin', 'out'],
+        'txc': ['SSerialTxCPin', 'out'],
+        'txd': ['SSerialTxDPin', 'out'],
+        'txe': ['SSerialTxEPin', 'out'],
+        'rx0': ['SSerialRx0Pin', 'in'],
+        'rx1': ['SSerialRx1Pin', 'in'],
+        'rx2': ['SSerialRx2Pin', 'in'],
+        'rx3': ['SSerialRx3Pin', 'in'],
+        'rx4': ['SSerialRx4Pin', 'in'],
+        'rx5': ['SSerialRx5Pin', 'in'],
+        'rx6': ['SSerialRx6Pin', 'in'],
+        'rx7': ['SSerialRx7Pin', 'in'],
+        'rx8': ['SSerialRx8Pin', 'in'],
+        'rx9': ['SSerialRx9Pin', 'in'],
+        'rxa': ['SSerialRxAPin', 'in'],
+        'rxb': ['SSerialRxBPin', 'in'],
+        'rxc': ['SSerialRxCPin', 'in'],
+        'rxd': ['SSerialRxDPin', 'in'],
+        'rxe': ['SSerialRxEPin', 'in'],
+    },
 }
 
 pin_lines = {
@@ -97,6 +162,7 @@ pin_lines = {
     'qcount': 'IOPortTag & x"{:02x}" & QCountTag & {}',
     'inm': 'IOPortTag & x"{:02x}" & InMTag & {}',
     'inmux': 'IOPortTag & x"{:02x}" & InMuxTag & {}',
+    'sserial': 'IOPortTag & x"{:02x}" & SSerialTag & {}',
 }
 
 consts_header = """
