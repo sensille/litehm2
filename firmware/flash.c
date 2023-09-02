@@ -4,9 +4,15 @@
 #include "debug.h"
 #include "flash.h"
 
+#ifdef CSR_SPIFLASH_CORE_BASE
 #define MAC_ADDR (SPIFLASH_SIZE - 0x100)
+#else
+#define MAC_ADDR 0
+#endif
+
 #define IP_ADDR (MAC_ADDR + 16)
 
+#ifdef CSR_SPIFLASH_CORE_BASE
 /* for now transfer x1 */
 static void
 flash_transfer(const uint8_t *wr1, int wr1_len, const uint8_t *wr2, int wr2_len,
@@ -44,6 +50,13 @@ flash_transfer(const uint8_t *wr1, int wr1_len, const uint8_t *wr2, int wr2_len,
 	}
 	spiflash_core_master_cs_write(0);
 }
+#else
+static void
+flash_transfer(const uint8_t *wr1, int wr1_len, const uint8_t *wr2, int wr2_len,
+	int rd_skip, uint8_t *rd, int rd_len)
+{
+}
+#endif
 
 void
 flash_read_uuid(uint8_t *uuid)
@@ -136,6 +149,7 @@ flash_read_page(uint32_t addr, uint8_t *data, int len)
 void
 flash_init(void)
 {
+#ifdef CSR_SPIFLASH_CORE_BASE
 #ifdef SPIFLASH_MODULE_DUMMY_BITS
 	spiflash_dummy_bits_setup(SPIFLASH_MODULE_DUMMY_BITS);
 #endif
@@ -143,4 +157,5 @@ flash_init(void)
 	spiflash_core_master_phyconfig_len_write(8);
 	spiflash_core_master_phyconfig_mask_write(1);
 	spiflash_core_master_phyconfig_width_write(1);
+#endif
 }

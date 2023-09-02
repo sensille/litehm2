@@ -215,6 +215,7 @@ ip_packet(ip_header_t *ip_in, int rxlen, ip_header_t *ip_out)
 	return rxlen;
 }
 
+#ifdef ETHMAC_BASE
 void
 eth_poll(void)
 {
@@ -400,3 +401,16 @@ eth_init(uint32_t my_ip, uint8_t my_mac[6])
 	own_mac2 = htons(my_mac[2] | (my_mac[3] << 8));
 	own_mac3 = htons(my_mac[4] | (my_mac[5] << 8));
 }
+#else
+
+void
+eth_poll(void)
+{
+}
+
+void
+eth_init(uint32_t my_ip, uint8_t my_mac[6])
+{
+}
+
+#endif
