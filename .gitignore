@@ -1,2 +1,10 @@
+firmware/*.d
+firmware/*.o
+firmware/*.bin
+firmware/*.elf
+tags
+firmware/tags
 build
+bitstreams/*.bit
+bitstreams/*.bin
 __pycache__
