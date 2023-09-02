@@ -206,6 +206,20 @@ sndput32(uint8_t **sndbuf, int *sndlen, uint32_t v)
 	return ret;
 }
 
+#ifndef HOSTMOT2_BASE
+static uint16_t
+hostmot2_ustimer_read(void)
+{
+	return 0;
+}
+
+static uint16_t
+hostmot2_rates_read(void)
+{
+	return 0;
+}
+#endif
+
 static int write_mspace(int mspace, uint16_t lbpaddr, uint32_t v);
 static int read_mspace(int mspace, uint16_t lbpaddr, uint32_t *v);
 int
@@ -421,7 +435,9 @@ write_mspace(int mspace, uint16_t lbpaddr, uint32_t v)
 {
 	switch (mspace) {
 	case 0: /* HostMot2 space, content */
+#ifdef HOSTMOT2_BASE
 		((uint32_t *)HOSTMOT2_BASE)[lbpaddr] = v;
+#endif
 		break;
 	case 2:	/* Ethernet EEPROM space */
 		if (mem6.w.eepromwena == 0x5a02) {
@@ -495,7 +511,11 @@ read_mspace(int mspace, uint16_t lbpaddr, uint32_t *v)
 {
 	switch (mspace) {
 	case 0: /* HostMot2 space, content */
+#ifdef HOSTMOT2_BASE
 		*v = ((uint32_t *)HOSTMOT2_BASE)[lbpaddr];
+#else
+		*v = 0;
+#endif
 		break;
 	case 2:	/* Ethernet EEPROM space */
 		*v = eeconfig.m[lbpaddr];

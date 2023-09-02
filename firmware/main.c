@@ -13,9 +13,17 @@
 
 
 /* config block at the start of the last sector */
+#ifdef CSR_SPIFLASH_CORE_BASE
 #define CONF_ADDR (SPIFLASH_SIZE - FLASH_ERASE_SIZE)
+#else
+#define CONF_ADDR 0
+#endif
 #define CONF_MAGIC 0xc0e13af2
 eeconfig_t eeconfig;
+
+#ifndef CSR_LEDS_BASE
+static void leds_out_write(int) {}
+#endif
 
 static void reboot(void)
 {
@@ -25,8 +33,10 @@ static void reboot(void)
 static void
 uart_init(void)
 {
+#ifdef CSR_UART_BASE
 	uart_ev_enable_write(0);
 	uart_ev_pending_write(3);
+#endif
 }
 
 int blocking_uart = 0;
@@ -39,22 +49,25 @@ int tx_ring_tail = 0;
 static void
 putc(const char c)
 {
+#ifdef CSR_UART_BASE
 	while (TX_NEXT(tx_ring_head + 1) == tx_ring_tail) {
 		/* full */
 		if (!blocking_uart)
 			return;
 		if (!uart_rxempty_read()) {
-			 uart_rxtx_read();
+			uart_rxtx_read();
 			uart_ev_pending_write(2);
 		}
 	}
 	tx_ring[tx_ring_head] = c;
 	tx_ring_head = TX_NEXT(tx_ring_head);
+#endif
 }
 
 static void
 uart_tx(void)
 {
+#ifdef CSR_UART_BASE
 	if (tx_ring_head == tx_ring_tail)
 		return;
 	if (uart_txfull_read())
@@ -62,6 +75,7 @@ uart_tx(void)
 
 	uart_rxtx_write(tx_ring[tx_ring_tail]);
 	tx_ring_tail = TX_NEXT(tx_ring_tail);
+#endif
 }
 
 void
@@ -151,7 +165,11 @@ flash_led(void)
 	static int ms = 0;
 	uint16_t ustimer;
 
+#ifdef HOSTMOT2_BASE
 	ustimer = hostmot2_ustimer_read();
+#else
+	ustimer = 0;
+#endif
 
 	/* rough 1ms timing */
 	if ((ustimer & ~0x3ff) == last_ustimer)
@@ -202,21 +220,25 @@ main(void)
 		uart_tx();
 
 		c = -1;
+#ifdef CSR_UART_BASE
 		if (!uart_rxempty_read()) {
 			c = uart_rxtx_read();
 			uart_ev_pending_write(2);
 		}
+#endif
 
 		if (c != -1) {
 			puts("got ");
 			putc(c);
 			puts("\n");
 		}
+#ifdef ETHMAC_BASE
 		if (c == 's') {
 			puts(" ethmac errors 0x");
 			puthex32(ethmac_sram_writer_errors_read());
 			puts("\n");
 		}
+#endif
 		if (c == 'r')
 			reboot();
 #ifdef WITH_LOADER

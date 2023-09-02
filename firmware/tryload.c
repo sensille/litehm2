@@ -61,10 +61,12 @@ void timer0_load(unsigned int value) {
 static void
 uart_write(char c)
 {
+#ifdef CSR_UART_BASE
 	while (uart_txfull_read())
 		;
 
 	uart_rxtx_write(c);
+#endif
 }
 
 static void
@@ -77,27 +79,36 @@ putstr(const char *s)
 static char
 uart_read(void)
 {
+#ifdef CSR_UART_BASE
 	char c = uart_rxtx_read();
 
 	uart_ev_pending_write(2);
 
 	return c;
-
+#else
+	return 0;
+#endif
 }
 
 static int
 uart_read_nonblock(void)
 {
+#ifdef CSR_UART_BASE
 	return uart_rxempty_read() == 0;
+#else
+	return 0;
+#endif
 }
 
 static void
 uart_drain(void)
 {
+#ifdef CSR_UART_BASE
 	while (uart_read_nonblock())
 		uart_read();
 	while (!uart_txempty_read())
 		;
+#endif
 }
 
 static void
@@ -147,6 +158,7 @@ copy_frame(uint32_t dstaddr, uint8_t *src, int len)
 	uint8_t *dst;
 	uint8_t readback[32];
 
+#ifdef CSR_SPIFLASH_CORE_BASE
 	if (dstaddr < SPIFLASH_BASE ||
 	    dstaddr >= (SPIFLASH_BASE + SPIFLASH_SIZE)) {
 		dst = (uint8_t *)dstaddr;
@@ -194,6 +206,11 @@ copy_frame(uint32_t dstaddr, uint8_t *src, int len)
 		dstaddr += l;
 		len -= l;
 	}
+#else
+	dst = (uint8_t *)dstaddr;
+	while (len--)
+		*dst++ = *src++;
+#endif
 }
 
 static uint32_t
