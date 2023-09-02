@@ -68,7 +68,7 @@ use ieee.numeric_std.all;
 --     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 --     POSSIBILITY OF SUCH DAMAGE.
 -- 
-use work.log2.all;
+use work.ibound.all;
 
 entity inm is									-- simple input filter 32 bits max
 			generic (							-- note that this somewhat wastefully mimics
@@ -111,18 +111,19 @@ signal muxcount: std_logic_vector(4 downto 0);
 signal prescale: std_logic_vector(1 downto 0);
 signal index: integer;
 -- mpg signals
-type mpgcounttype is array(3 downto 0) of std_logic_vector(7 downto 0);
+constant nummpgs: integer := ibound(inwidth/2,4);
+constant nummpgpins: integer := nummpgs*2;
+type mpgcounttype is array(nummpgs-1 downto 0) of std_logic_vector(7 downto 0);
 signal mpgcounter: mpgcounttype;
-alias  mpgin: std_logic_vector(7 downto 0) is filtereddata(7 downto 0);
-signal mpgind: std_logic_vector(7 downto 0);
-signal mpgmode: std_logic_vector(3 downto 0);
-
+alias  mpgin: std_logic_vector(nummpgpins-1 downto 0) is filtereddata(nummpgpins-1 downto 0);
+signal mpgind: std_logic_vector(nummpgpins-1 downto 0);
+signal mpgmode: std_logic_vector(nummpgs-1 downto 0);
 begin
-	ainm: process  (clk,
-                      controlreg, 
-							 indata, 
-							 ibus) 
+	ainm: process  (clk, controlreg, indata, ibus, readfilter, filterreg, readfiltereddata,
+                    filtereddata, readcontrol, readrawdata, rawdata, readmpg, mpgcounter) 
 	begin
+		report("InM with width: " & integer'image(inwidth));
+		report("InM number of MPGs: " & integer'image(nummpgs));
 		if rising_edge(clk) then
 			prescale <= prescale +1;			
 			if prescale = 0 then
@@ -174,14 +175,13 @@ begin
 				filterreg <= ibus(inwidth-1 downto 0);
 			end if;
 			if loadmpg = '1' then
-				mpgmode(0) <= ibus(0);
-				mpgmode(1) <= ibus(8);
-				mpgmode(2) <= ibus(16);
-				mpgmode(3) <= ibus(24);
+				for i in 0 to nummpgs-1 loop	   
+					mpgmode(i) <= ibus(i*8);
+				end loop;
 			end if;
 			
 			mpgind <= mpgin;
-			for i in 0 to 3 loop	   
+			for i in 0 to nummpgs-1 loop	   
 				if mpgmode(i) = '0' then	-- 1X mode
 					if ( mpgind(i*2) = '0' and mpgin(i*2) = '1' and mpgin(i*2+1) = '1') then 	-- rising A when B high		   
 						mpgcounter(i) <= mpgcounter(i) + 1; 	
@@ -224,7 +224,9 @@ begin
 			obus(Buswidth-1 downto inwidth) <= ( others => '0' );
 		end if;
 		if readmpg = '1' then 
-			obus<= mpgcounter(3) & mpgcounter(2) & mpgcounter(1) & mpgcounter(0);
+			for i in 0 to nummpgs-1 loop	   
+				obus(((i+1)*8)-1 downto i*8) <= mpgcounter(i);			
+			end loop;
 		end if;
 		
 	end process;

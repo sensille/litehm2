@@ -2,7 +2,8 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
-
+use ieee.math_real.all;
+use ieee.numeric_std.all;
 --
 -- Copyright (C) 2007, Peter C. Wallace, Mesa Electronics
 -- http://www.mesanet.com
@@ -69,61 +70,55 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 -- 
 
 
--- Simple UART with 32 bit bus interface
--- 16 byte deep receive FIFO
--- Can read 4,3,2,1 bytes from FIFO depending on data register read offset
--- Base Address = 1 byte
--- Base Address +1 = 2 bytes
--- Base Address +2 = 3 bytes
--- Base Address +3 = 4 bytes
-entity uartr is
-	port (
+-- Simple 8 bit UART RX 32 deep FIFO version
+entity uartr8b is
+		generic( clock : integer);
+		port (
 		clk : in std_logic;
-	 	ibus : in std_logic_vector(31 downto 0);
-      obus : out std_logic_vector(31 downto 0);
-		addr : in std_logic_vector(1 downto 0);
+	 	ibus : in std_logic_vector(7 downto 0);
+      obus : out std_logic_vector(7 downto 0);
       popfifo : in std_logic;
-		loadbitrate : in std_logic;
-		readbitrate : in std_logic;
+		loadbitratel : in std_logic;
+		loadbitratem : in std_logic;
+		loadbitrateh : in std_logic;
+		readbitratel : in std_logic;
+		readbitratem : in std_logic;
+		readbitrateh : in std_logic;
       clrfifo : in std_logic;
 		readfifocount : in std_logic;
 		loadmode : in std_logic;
 		readmode : in std_logic;
+		loadfilter : in std_logic;
 		fifohasdata : out std_logic;
 		rxmask : in std_logic;
       rxdata : in std_logic
 		);
-end uartr;
+end uartr8b;
 
-architecture Behavioral of uartr is
+architecture Behavioral of uartr8b is
 
 -- FIFO related signals
 	signal pushdata: std_logic_vector(7 downto 0);
-	signal popadd0: std_logic_vector(3 downto 0) := x"f";
-	signal popadd1: std_logic_vector(3 downto 0) := x"f";
-	signal popadd2: std_logic_vector(3 downto 0) := x"f";
-	signal popadd3: std_logic_vector(3 downto 0) := x"f";
-	
-	signal popdata: std_logic_vector(31 downto 0);
-	signal datacounter: std_logic_vector(4 downto 0);
+	signal popadd: std_logic_vector(4 downto 0) := "11111";	
+	signal popdata: std_logic_vector(7 downto 0);
+	signal datacounter: std_logic_vector(5 downto 0);
 	signal push: std_logic;  
 	signal pop: std_logic;  
-	signal popsize: std_logic_vector(2 downto 0);
 	signal clear: std_logic;
 	signal lfifoempty: std_logic; 
 	signal lfifohasdata: std_logic; 
 
 -- uart interface related signals
 
+constant defaultfilter : real := round((real(clock)/5000000.0)); --default filter TC is 200 ns
 constant DDSWidth : integer := 20;
 
 signal BitrateDDSReg : std_logic_vector(DDSWidth-1 downto 0);
 signal BitrateDDSAccum : std_logic_vector(DDSWidth-1 downto 0);
-alias  DDSMSB : std_logic is BitrateDDSAccum(DDSWidth-1);
+alias  DDSMSB : std_logic is BitrateDDSAccum(DDSWidth -1);
 signal OldDDSMSB: std_logic;  
 signal SampleTime: std_logic; 
 signal BitCount : std_logic_vector(3 downto 0);
-signal BytePointer : std_logic_vector(2 downto 0) := "000";
 signal SReg: std_logic_vector(9 downto 0);
 alias  SregData: std_logic_vector(7 downto 0)is SReg(8 downto 1);
 alias  StartBit: std_logic is Sreg(0);
@@ -131,113 +126,50 @@ alias  StopBit: std_logic is Sreg(9);
 signal RXPipe : std_logic_vector(1 downto 0);
 signal Go: std_logic; 
 signal DAV: std_logic;
-signal ModeReg: std_logic_vector(5 downto 0);
-alias FalseStart: std_logic is ModeReg(0);-- started recieve but middle of start bit is '1' 
-alias OverRun: std_logic is ModeReg(1);	-- '0' where stop bit should be
-alias RXMaskEn: std_logic is ModeReg(3); 	-- enable TXEN of transmit side to disable receive
-alias FIFOError: std_logic is ModeReg(4); -- pop with no or not enough data
-alias LostData: std_logic is ModeReg(5); 	-- data overrun
-	
+signal ModeReg: std_logic_vector(3 downto 0);
+alias FalseStart: std_logic is ModeReg(0); 
+alias OverRun: std_logic is ModeReg(1);
+alias RXMaskEn: std_logic is ModeReg(3); 
+signal FilterReg: std_logic_vector(7 downto 0) := std_logic_vector(to_unsigned(integer(defaultfilter),8)); 
+signal FilterCount: std_logic_vector(7 downto 0);
+signal rxdatad: std_logic;
+signal RXDataFilt: std_logic;
 			
 begin
 
-	fifosrl0: for i in 0 to 7 generate
-          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
-          D   => pushdata(i),
+	fifosrl: for i in 0 to 7 generate
+		asr32e: entity work.lutsrl32 generic map (x"00000000") port map(
+ 			 D	  => pushdata(i),
           CE  => push,
           CLK => clk,
-          A   => popadd0,
+          A   => popadd,
           Q   => popdata(i)
 			);	
   	end generate;
 	
-	fifosrl1: for i in 0 to 7 generate
-	  asr16e: entity work.lutsrl16 generic map (x"0000") port map(
-          D   => pushdata(i),
-          CE  => push,
-          CLK => clk,
-          A   => popadd1,
-          Q   => popdata(8+i)
-			);	
-  	end generate;
 	
-	fifosrl2: for i in 0 to 7 generate
-          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
-          D   => pushdata(i),
-          CE  => push,
-          CLK => clk,
-          A   => popadd2,
-          Q   => popdata(16+i)
-			);	
-  	end generate;
-	
-	fifosrl3: for i in 0 to 7 generate
-          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
-          D   => pushdata(i),
-          CE  => push,
-          CLK => clk,
-          A   => popadd3,
-          Q   => popdata(24+i)
-			);	
-  	end generate;
-	
-	afifo: process (clk,popdata,datacounter)
+	afifo: process (clk,popdata,datacounter,lfifoempty)
 	begin
 		if rising_edge(clk) then
 			
-			if push = '1'  and pop = '0' then
-				if datacounter /= 16 then	-- a push
-					-- always increment the data counter if not full
-					datacounter <= datacounter +1;
-					popadd0 <= popadd0 +1;						-- popadd must follow data down shiftreg
-				else
-					LostData <= '1';
-				end if;	
+			if push = '1'  and pop = '0' and datacounter /= 32 then	-- a push
+		 		-- always increment the data counter if not full
+				datacounter <= datacounter +1;
+				popadd <= popadd +1;						-- popadd must follow data down shiftreg
 			end if;		 		
 						   
-			if  (pop = '1') and (push = '0') then		-- a pop
-				if datacounter >= popsize then  
-					datacounter <= datacounter - popsize;
-					popadd0 <= popadd0 - popsize;
-				else
-					FIFOError <= '1';
-				end if;	
-			end if;
-
-			if  (pop = '1') and (push = '1') then		-- simultaneaous pop and push
-				if datacounter >= popsize then			-- note pushdata was not available 
-				                                       -- when read occured so compare datacounter with popsize
-					datacounter <= datacounter - (addr);
-					popadd0 <= popadd0 - (addr);
-				else												-- if pop is not valid, just do push part
-					datacounter <= datacounter +1;
-					popadd0 <= popadd0 +1;
-					FIFOError <= '1';
-				end if;	
+			if  (pop = '1') and (push = '0') and (lfifoempty = '0') then		-- a pop
+				datacounter <= datacounter - 1;
+				popadd <= popadd -1;
 			end if;
 
 			if clear = '1' then -- a clear fifo
-				popadd0  <= (others => '1');
+				popadd  <= (others => '1');
 				datacounter <= (others => '0');
-				LostData <= '0';
-				FIFOError <= '0';
 			end if;	
-	
 
 		end if; -- clk rise
-		-- The way this mess works is that we have 4 byte wide FIFOs with duplicated data
-		-- but the readout point is shifted by one byte for each succeeding FIFO so we can read up to
-		-- 32 bits (4 bytes) at once. Wasteful, but SRL16s are cheap
-
-
-		popadd1 <= popadd0 -1;		-- note that these are not forced to 0 on underflow
-		popadd2 <= popadd0 -2;		-- so unused bytes of a less than 4 byte read
-		popadd3 <= popadd0 -3;		-- will be stale recv data - not good for security reasons!
-		                           -- if this matters, force to 0 on underflow will result in duplicated
-											-- current data on unused bytes.
-			
-		popsize <= ('0'&addr) +1;
-		
+	
 		if datacounter = 0 then
 			lfifoempty <= '1';
 		else
@@ -246,13 +178,30 @@ begin
 		fifohasdata <= not lfifoempty;		 
 	end process afifo;
 
-
-	asimpleuartrx: process (clk)
+	asimpleuartrx: process (clk,OldDDSMSB, BitrateDDSAccum, SReg, DAV, 
+	                        popfifo, clrfifo, readfifocount, datacounter, 
+									readbitratel, BitrateDDSReg, readbitratem, 
+									readbitrateh, popdata, readmode, ModeReg, rxmask, lfifoempty)
 	begin
+		report "Default FilterReg = " & integer'image(integer(defaultfilter));
 		if rising_edge(clk) then
-			RXPipe <= RXPipe(0) & rxdata;  			-- Two stage rx data pipeline to compensate for
+			RXDataD <= rxdata;
+			RXPipe <= RXPipe(0) & RXDataFilt;  		-- Two stage rx data pipeline to compensate for
 																-- two clock delay from start bit detection to acquire loop startup
-																		
+
+			if (RXDataD = '1') and (FilterCount < FilterReg) then		-- simple digital filter on rxdata
+				FilterCount <= FilterCount + 1;
+			end if;
+			if (RXDataD = '0') and (FilterCount /= 0) then 
+				FilterCount <= FilterCount -1;
+			end if;
+			if FilterCount >= FilterReg then
+				RXDataFilt<= '1';
+			end if;
+			if FilterCount = 0 then
+				RXDataFilt<= '0';
+			end if;
+															
 			if Go = '1' then 
 				BitRateDDSAccum <= BitRateDDSAccum + BitRateDDSReg;
 				if SampleTime = '1' then
@@ -267,7 +216,7 @@ begin
 					
 					if BitCount = "1001" then	-- false start bit check
 						if RXPipe(1) = '1' then
-							Go <= '0';				-- abort receive
+							Go <= '0';
 							FalseStart <= '1';
 						end if;
 					end if;	
@@ -281,7 +230,7 @@ begin
 				BitCount <= "1001";
 			end if;
 			
-			if Go = '0' and rxdata = '0' and (rxmask and RXMaskEn) = '0' then		-- start bit detection
+			if Go = '0' and RXDataFilt = '0' and (rxmask and RXMaskEn) = '0' then		-- start bit detection
 				Go <= '1';
 			end if;	
 			
@@ -291,12 +240,22 @@ begin
 			
 			OldDDSMSB <= DDSMSB;							-- for Phase accumulator MSB edge detection
 
-			if loadbitrate =  '1' then 
-				BitRateDDSReg <= ibus(DDSWidth-1 downto 0);				 
+			if loadbitratel =  '1' then 
+				BitRateDDSReg(7 downto 0) <= ibus;				 
+			end if;
+			if loadbitratem =  '1' then 
+				BitRateDDSReg(15 downto 8) <= ibus;				 
+			end if;
+			if loadbitrateh =  '1' then 
+				BitRateDDSReg(19 downto 16) <= ibus(3 downto 0);				 
 			end if;
 			
 			if loadmode=  '1' then 
-				ModeReg(3 downto 0) <= ibus(3 downto 0);
+				ModeReg <= ibus(3 downto 0);
+			end if;
+			
+			if loadfilter=  '1' then 
+				FilterReg <= ibus;
 			end if;
 
 		end if; -- clk
@@ -309,17 +268,26 @@ begin
 
 		obus <= (others => 'Z');
 		if	readfifocount =  '1' then
-			obus(4 downto 0) <= datacounter;
---			obus(31 downto 5) <= (others => '0');
+			obus(5 downto 0) <= datacounter;
+			obus(7 downto 6) <= (others => '0');
 		end if;
-      if readbitrate =  '1' then
-			obus(DDSWidth-1 downto 0) <= BitRateDDSReg;
+
+      if readbitratel =  '1' then
+			obus <= BitRateDDSReg(7 downto 0);
 		end if;
+      if readbitratem =  '1' then
+			obus <= BitRateDDSReg(15 downto 8);
+		end if;
+      if readbitrateh =  '1' then
+			obus(3 downto 0) <= BitRateDDSReg(19 downto 16);
+		end if;
+
 		if popfifo =  '1' then
 			obus <= popdata;
 		end if;
+
 		if readmode =  '1' then
-			obus(5 downto 0) <= ModeReg;
+			obus(3 downto 0) <= ModeReg;
 			obus(6) <= rxmask;
 			obus(7) <= not lfifoempty;
 			

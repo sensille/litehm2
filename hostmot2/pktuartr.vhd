@@ -156,24 +156,7 @@ signal FilterReg: std_logic_vector(7 downto 0) := std_logic_vector(to_unsigned(i
 signal FilterCount: std_logic_vector(7 downto 0);
 signal RXDataD: std_logic;
 signal RXDataFilt: std_logic;
-
-  component SRL16E
---
-    generic (INIT : bit_vector);
-
-
---
-    port (D   : in  std_logic;
-          CE  : in  std_logic;
-          CLK : in  std_logic;
-          A0  : in  std_logic;
-          A1  : in  std_logic;
-          A2  : in  std_logic;
-          A3  : in  std_logic;
-          Q   : out std_logic); 
-  end component;
-	
-			
+		
 begin
 
 	buffram : entity work.dpram 
@@ -213,27 +196,21 @@ begin
 	end process abuf;
 	
 	fiforc: for i in 0 to log2(MaxFrameSize)-1 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => RecvCount(i),
+          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => RecvCount(i),
           CE  => PushRC,
           CLK => clk,
-          A0  => RCPopAdd(0),
-          A1  => RCPopAdd(1),
-          A2  => RCPopAdd(2),
-          A3  => RCPopAdd(3),
+          A   => RCPopAdd,
           Q   => RCPopData(i)
 			);	
   	end generate;
 
 	fifoerrs: for i in 0 to 2 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => RXErrs(i),
+	  asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => RXErrs(i),
           CE  => PushRC,
           CLK => clk,
-          A0  => RCPopAdd(0),
-          A1  => RCPopAdd(1),
-          A2  => RCPopAdd(2),
-          A3  => RCPopAdd(3),
+          A   => RCPopAdd,
           Q   => ErrPopData(i)
 			);	
   	end generate;

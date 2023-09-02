@@ -200,7 +200,8 @@ architecture Behavioral of DumbAss8sqws is
   constant ldsp	: std_logic_vector (4 downto 0) := "11101"; -- xE8
   constant stsp   : std_logic_vector (4 downto 0) := "11111"; -- xF8
 -- basic signals
-
+   
+  
   signal accumcar  : std_logic_vector (width downto 0);  -- accumulator+carry
   alias accum		: std_logic_vector (width-1 downto 0) is accumcar(width-1 downto 0);
   alias carrybit	: std_logic is accumcar(width);
@@ -289,6 +290,7 @@ begin  -- the CPU
 		wea	=> stackwe
 		);
 
+    
   nextpcproc : process (clk, reset, pc, zero, nextpc, id2,
 								ind0, ind2, idbus, opcode0, jind0, jind2,
 								opcode2, carrybit,pcplus1, stackdout)  -- next pc calculation - jump decode

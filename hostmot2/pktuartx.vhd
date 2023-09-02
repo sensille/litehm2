@@ -141,22 +141,6 @@ signal DriveEnable: std_logic;
 signal DriveEnHold: std_logic;
 signal WaitingForDrive: std_logic;
 
-component SRL16E
---
-    generic (INIT : bit_vector);
-
-
---
-    port (D   : in  std_logic;
-          CE  : in  std_logic;
-          CLK : in  std_logic;
-          A0  : in  std_logic;
-          A1  : in  std_logic;
-          A2  : in  std_logic;
-          A3  : in  std_logic;
-          Q   : out std_logic); 
-end component;
-
 begin
 
 	buffram : entity work.dpram 
@@ -199,14 +183,11 @@ begin
 				
 
 	fifosrl: for i in 0 to log2(MaxFrameSize)-1 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => ibus(i),
+          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => ibus(i),
           CE  => pushsc,
           CLK => clk,
-          A0  => SCPopAdd(0),
-          A1  => SCPopAdd(1),
-          A2  => SCPopAdd(2),
-          A3  => SCPopAdd(3),
+          A   => SCPopAdd,
           Q   => SCPopData(i)
 			);	
   	end generate;

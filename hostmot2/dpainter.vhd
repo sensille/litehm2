@@ -161,37 +161,15 @@ architecture Behavioral of dpainterd is
 	signal fifohasdata: std_logic; 
 	signal overrunerror: std_logic; 
 	
-  component SRLC32E
---
-    generic (INIT : bit_vector);
-
-
---
-    port (D   : in  std_logic;
-          CE  : in  std_logic;
-          CLK : in  std_logic;
-          A0  : in  std_logic;
-          A1  : in  std_logic;
-          A2  : in  std_logic;
-          A3  : in  std_logic;
-          A4  : in  std_logic;
-          Q   : out std_logic;
-			 Q31 : out std_logic);
-  end component;
-	
 			
 begin
 
 	fifosrl: for i in 0 to 31 generate
-		asr32e: SRLC32E generic map (x"00000000") port map(
- 			 D	  => ibus(i),
+		asr32e: entity work.lutsrl32 generic map (x"00000000") port map(
+          D   => ibus(i),
           CE  => push,
           CLK => clk,
-          A0  => popadd(0),
-          A1  => popadd(1),
-          A2  => popadd(2),
-          A3  => popadd(3),
-          A4  => popadd(4),
+          A  => popadd,
           Q   => popdata(i)
 			);	
   	end generate;

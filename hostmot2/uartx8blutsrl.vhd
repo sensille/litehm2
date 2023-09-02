@@ -67,15 +67,18 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 --     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 --     POSSIBILITY OF SUCH DAMAGE.
 -- 
-
-entity uartx is
+-- Simple 8 bit UART TX 32 deep FIFO version
+entity uartx8b is 
     Port ( clk : in std_logic;
-	 		  ibus : in std_logic_vector(31 downto 0);
-           obus : out std_logic_vector(31 downto 0);
-			  addr : in std_logic_vector(1 downto 0);
+	 		  ibus : in std_logic_vector(7 downto 0);
+           obus : out std_logic_vector(7 downto 0);
            pushfifo : in std_logic;
-			  loadbitrate : in std_logic;
-           readbitrate : in std_logic;          
+			  loadbitratel : in std_logic;
+			  loadbitratem : in std_logic;
+			  loadbitrateh : in std_logic;
+           readbitratel : in std_logic;          
+           readbitratem : in std_logic;          
+           readbitrateh : in std_logic;          
 			  clrfifo : in std_logic;
 			  readfifocount : in std_logic;
 			  loadmode : in std_logic;
@@ -85,16 +88,15 @@ entity uartx is
 			  drven : out std_logic;
            txdata : out std_logic
           );
-end uartx;
+end uartx8b;
 
-architecture Behavioral of uartx is
+architecture Behavioral of uartx8b is
 
 -- FIFO related signals
-	signal pushdata: std_logic_vector(33 downto 0);
-	signal popadd: std_logic_vector(3 downto 0) := x"f";
-	signal popdata: std_logic_vector(33 downto 0);
-	alias  byteshere: std_logic_vector(1 downto 0) is popdata(33 downto 32);
-	signal datacounter: std_logic_vector(4 downto 0);
+	signal pushdata: std_logic_vector(7 downto 0);
+	signal popadd: std_logic_vector(4 downto 0) := "11111";
+	signal popdata: std_logic_vector(7 downto 0);
+	signal datacounter: std_logic_vector(5 downto 0);
 	signal push: std_logic;  
 	signal pop: std_logic;  
 	signal clear: std_logic;
@@ -111,30 +113,26 @@ alias  DDSMSB : std_logic is BitrateDDSAccum(DDSWidth-1);
 signal OldDDSMSB: std_logic;  
 signal SampleTime: std_logic; 
 signal BitCount : std_logic_vector(3 downto 0);
-signal BytePointer : std_logic_vector(2 downto 0) := "000";
 signal SReg: std_logic_vector(10 downto 0);
-signal SendData: std_logic_vector(7 downto 0);
 alias  SregData: std_logic_vector(7 downto 0)is SReg(9 downto 2);
 alias StartBit: std_logic is Sreg(1);
 alias StopBit: std_logic is Sreg(10);
 alias IdleBit: std_logic is Sreg(0);
 signal Go: std_logic := '0'; 
-signal ModeReg: std_logic_vector(6 downto 0);
+signal ModeReg: std_logic_vector(5 downto 0);
 alias DriveEnDelay: std_logic_vector(3 downto 0) is ModeReg (3 downto 0);
-alias FIFOError: std_logic is ModeReg(4);
-alias DriveEnAuto: std_logic is ModeReg(5);
-alias DriveEnBit: std_logic is ModeReg(6);
+alias DriveEnAuto: std_logic is ModeReg(4);
+alias DriveEnBit: std_logic is ModeReg(5);
 signal DriveEnable: std_logic;
 signal DriveEnHold: std_logic;
 signal WaitingForDrive: std_logic;
 signal DriveDelayCount: std_logic_vector(3 downto 0);
-
-			
+		
 begin
 
-	fifosrl: for i in 0 to 33 generate
-          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
-          D   => pushdata(i),
+	fifosrl: for i in 0 to 7 generate
+		asr16e: entity work.lutsrl32 generic map (x"00000000") port map(
+ 			 D	  => pushdata(i),
           CE  => push,
           CLK => clk,
           A   => popadd,
@@ -144,18 +142,14 @@ begin
 
 	
 
-	afifo: process (clk,popdata,datacounter)
+	afifo: process (clk,popdata,datacounter,lfifoempty)
 	begin
 		if rising_edge(clk) then
 			
-			if push = '1'  and pop = '0'  then
-				if datacounter /= 16 then	-- a push
-					-- always increment the data counter if not full
-					datacounter <= datacounter +1;
-					popadd <= popadd +1;						-- popadd must follow data down shiftreg
-				else
-					FIFOError <= '1';
-				end if;	
+			if push = '1'  and pop = '0' and datacounter /= 32 then	-- a push
+		 		-- always increment the data counter if not full
+				datacounter <= datacounter +1;
+				popadd <= popadd +1;						-- popadd must follow data down shiftreg
 			end if;		 		
 						   
 			if  (pop = '1') and (push = '0') and (lfifoempty = '0') then	-- a pop
@@ -169,7 +163,6 @@ begin
 			if clear = '1' then -- a clear fifo
 				popadd  <= (others => '1');
 				datacounter <= (others => '0');
-				FIFOError <= '0';
 			end if;	
 	
 
@@ -182,8 +175,11 @@ begin
 		fifohasdata <= not lfifoempty;		 
 	end process afifo;
 
-
-	asimpleuarttx: process (clk)
+	asimpleuarttx: process (clk,OldDDSMSB, BitrateDDSAccum, ibus, pushfifo,
+									clrfifo, DriveDelayCount, DriveEnable, DriveEnAuto,
+									Go, pop, fifohasdata, txen, ModeReg, readfifocount,
+									datacounter, readbitratel, BitrateDDSReg, readbitratem, 
+									readbitrateh, readmode, SReg, lfifoempty, waitingfordrive )
 	begin
 		if rising_edge(clk) then
 			if Go = '1' then 
@@ -209,15 +205,10 @@ begin
 				StopBit <= '1';
 				IdleBit <= '1';				
 				BitCount <= "1010";
-				if fifohasdata = '1' and pop = '0' and txen = '1' and DriveEnHold = '0' then   		                                                                                                                                 -- UART SReg not busy and we have data
-					if bytepointer <= ('0'& byteshere) then 	-- still bytes to send in this double word
-						SRegData <= SendData;
-						Go <= '1';						
-						bytepointer <= bytepointer +1;
-					else
-						pop <= '1';
-						bytepointer <= "000";
-					end if;
+				if fifohasdata = '1' and pop = '0' and txen = '1' and DriveEnHold = '0' then  -- UART SReg not busy and we have data			
+					pop <= '1';							
+					SRegData <= popdata;
+					Go <= '1';						
 				end if;				
 			end if;		
 			
@@ -233,19 +224,24 @@ begin
 			
 			OldDDSMSB <= DDSMSB;
 
-			if loadbitrate =  '1' then 
-				BitRateDDSReg <= ibus(DDSWidth-1 downto 0);				 
+			if loadbitratel =  '1' then 
+				BitRateDDSReg(7 downto 0) <= ibus;				 
+			end if;
+			if loadbitratem =  '1' then 
+				BitRateDDSReg(15 downto 8) <= ibus;				 
+			end if;
+			if loadbitrateh =  '1' then 
+				BitRateDDSReg(19 downto 16) <= ibus(3 downto 0);				 
 			end if;
 
 			if loadmode =  '1' then 
-				ModeReg(3 downto 0) <= ibus(3 downto 0);
-				ModeReg(6 downto 5) <= ibus(6 downto 5);
+				ModeReg<= ibus(5 downto 0);				 
 			end if;
 
 		end if; -- clk
 		
 		SampleTime <= (not OldDDSMSB) and DDSMSB;
-      pushdata <= addr & ibus;		-- msbs of FIFO data are address bits to specify data size	
+      pushdata <= ibus;				
 		push <= pushfifo;	
 		clear <= clrfifo;
 		
@@ -263,32 +259,32 @@ begin
 			DriveEnable <= DriveEnBit;
 		end if;	
 		
-		case bytepointer(1 downto 0) is 
-			when "00" => SendData <= PopData(7 downto 0);
-			when "01" => SendData <= PopData(15 downto 8);
-			when "10" => SendData <= PopData(23 downto 16);
-			when "11" => SendData <= PopData(31 downto 24);
-			when others => null;
-		end case;
 		
 		obus <= (others => 'Z');
 		if	readfifocount =  '1' then
-			obus(4 downto 0) <= datacounter;
-			obus(31 downto 5) <= (others => '0');
+			obus(5 downto 0) <= datacounter;
+			obus(7 downto 6) <= (others => '0');
 		end if;
-      if readbitrate =  '1' then
-			obus(DDSWidth-1 downto 0) <= BitRateDDSReg;
+
+      if readbitratel =  '1' then
+			obus <= BitRateDDSReg(7 downto 0);
+		end if;
+      if readbitratem =  '1' then
+			obus <= BitRateDDSReg(15 downto 8);
+		end if;
+      if readbitrateH =  '1' then
+			obus(3 downto 0) <= BitRateDDSReg(19 downto 16);
 		end if;
 
 		if readmode =  '1' then
-			obus(6 downto 0) <= ModeReg;
+			obus(5 downto 0) <= ModeReg;
+			obus(6) <= txen;
 			obus(7) <= Go or Pop or FIFOHasData;
 		end if;
 
-		txdata<= SReg(0);
+		txdata <= SReg(0);
 		fifoempty <= lfifoempty;
 		drven <= DriveEnable;
 		
 	end process asimpleuarttx;
-	
 end Behavioral;

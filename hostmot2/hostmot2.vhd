@@ -1,7 +1,10 @@
 library IEEE;
 use IEEE.std_logic_1164.all;  -- defines std_logic types
-use IEEE.std_logic_ARITH.ALL;
+--use IEEE.std_logic_ARITH.ALL;
 use IEEE.std_logic_UNSIGNED.ALL;
+use ieee.math_real.all;
+use ieee.numeric_std.all;
+
 --
 -- Copyright (C) 2007, Peter C. Wallace, Mesa Electronics
 -- http://www.mesanet.com
@@ -68,8 +71,8 @@ use IEEE.std_logic_UNSIGNED.ALL;
 -- 
 
 use work.IDROMConst.all;	
-library UNISIM;
-use UNISIM.VComponents.all;
+--library UNISIM;
+--use UNISIM.VComponents.all;
 use work.log2.all;
 use work.decodedstrobe.all;	
 use work.oneofndecode.all;	
@@ -92,7 +95,7 @@ entity HostMot2 is
 		ThePinDesc: PinDescType;
 		TheModuleID: ModuleIDType;
 		IDROMType: integer;		
-	   SepClocks: boolean;
+	    SepClocks: boolean;
 		OneWS: boolean;
 		UseIRQLogic: boolean;
 		PWMRefWidth  : integer;
@@ -133,8 +136,11 @@ entity HostMot2 is
 	int: out std_logic; 
 	dreq: out std_logic;
 	demandmode: out std_logic;
-	iobits: inout std_logic_vector (iowidth -1 downto 0);			
-	liobits: inout std_logic_vector (liowidth -1 downto 0);
+	ioins : in std_logic_vector(iowidth -1 downto 0);		-- external inputs
+	ioouts : out std_logic_vector(iowidth -1 downto 0);		-- external outputs
+    ioenas : out std_logic_vector(iowidth -1 downto 0);		-- external output enables
+	lioins: in std_logic_vector (liowidth -1 downto 0);	    -- local I/O inputs	
+	lioouts: out std_logic_vector (liowidth -1 downto 0);   -- local I/O outputs
 	rates: out std_logic_vector (4 downto 0);
 	leds: out std_logic_vector(ledcount-1 downto 0);
 	wdlatchedbite: out std_logic
@@ -227,6 +233,7 @@ constant InMWidth: InMWidthType :=(
 constant DPainters: integer := NumberOfModules(TheModuleID,DPainterTag); 
 
 constant XY2Mods: integer := NumberOfModules(TheModuleID,XY2ModTag); 
+constant OneShots: integer := NumberOfModules(TheModuleID,OneShotTag);
 
 -- extract the needed Stepgen table width from the max pin# used with a stepgen tag
 constant StepGenTableWidth: integer := MaxPinsPerModule(ThePinDesc,StepGenTag);
@@ -356,7 +363,8 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			loadopendrainmode => LoadOpenDrainModeCmd(i),
 			loadinvert => LoadOutputInvCmd(i),
 			readddr => ReadDDRCmd(i),
-			portdata => IOBits((((i+1)*PortWidth) -1) downto (i*PortWidth)), 
+			portdata => ioouts((((i+1)*PortWidth) -1) downto (i*PortWidth)), 
+			dirdata => ioenas((((i+1)*PortWidth) -1) downto (i*PortWidth)), 
 			altdata => Altdata((((i+1)*PortWidth) -1) downto (i*PortWidth))
 			);	
 	end generate;
@@ -368,7 +376,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 		port map (
 		obus => obus,
 		readport => ReadPortCmd(i),
-		portdata => IOBits((((i+1)*PortWidth) -1) downto (i*PortWidth))
+		portdata => ioins((((i+1)*PortWidth) -1) downto (i*PortWidth))
  		);	
 	end generate;
 
@@ -580,7 +588,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 				if ThePinDesc(i)(15 downto 8) = HM2DPLLTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					case (ThePinDesc(i)(7 downto 0)) is	
 						when HM2DPLLSyncInPin =>
-							DPLLSyncIn <= IOBits(i);
+							DPLLSyncIn <= IOIns(i);
 						when HM2DPLLRefOutPin =>
 							AltData(i) <= DPLLRefOut;				
 						when HM2DPLLTimer1Pin =>
@@ -931,7 +939,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ReadStepGenTableMax <= OneOfNDecode(STEPGENs,StepGenTableMaxSel,Readstb,A(7 downto 2));
 		end process StepGenDecodeProcess;
 		
-		DoStepgenPins: process(IOBits,StepGenOut)
+		DoStepgenPins: process(IOINS,StepGenOut)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = StepGenTag then											
@@ -940,9 +948,9 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 					end if;
 					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function
 						when StepGenIndexPin =>
-							StepGenIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							StepGenIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when StepGenProbePin =>
-							Probe <= IOBits(i);	-- only 1 please!
+							Probe <= IOINS(i);	-- only 1 please!
 						when others => null;
 					end case;
 				end if;
@@ -963,12 +971,12 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 					end if;
 				end loop;
 			end process;
-			DoSharedIndexPins: process(IOBits)
+			DoSharedIndexPins: process(IOINS)
 			begin
 				for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 					if ThePinDesc(i)(15 downto 8) = QCountTag then											
 						if (ThePinDesc(i)(7 downto 0)) = SharedSDQCIdxPin then--secondary pin function				   
-							StepGenIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							StepGenIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 							report("Making shared index from I/O: "& integer'image(i));	
 							report("and instance: "& integer'image(conv_integer(ThePinDesc(i)(23 downto 16))));	
 						end if;
@@ -1215,23 +1223,23 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ReadQCounterCCR <= OneOfNDecode(QCounters,QCounterCCRSel,Readstb,A(7 downto 2));
 		end process QCounterDecodeProcess;
 
-		DoQCounterPins: process(IOBits)
+		DoQCounterPins: process(IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = QCountTag then											
 					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function
 						when QCountQAPin =>
-							QuadA(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i); 
+							QuadA(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i); 
 						when QCountQBPin =>
-							QuadB(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							QuadB(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when QCountIdxPin =>
-							Index(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							Index(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when SharedSDQCIdxPin =>
-							Index(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							Index(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when QCountIdxMaskPin =>
-							IndexMask(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							IndexMask(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when QCountProbePin =>
-							Probe <= IOBits(i);	-- only 1 please!
+							Probe <= IOINS(i);	-- only 1 please!
 						when others => null;
 					end case;
 				end if;
@@ -1601,23 +1609,23 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ReadMuxedQCounterCCR <= OneOfNDecode(MuxedQCounters,MuxedQCounterCCRSel,Readstb,A(7 downto 2));
 		end process MuxedQCounterDecodeProcess;	
 
-		DoMuxedQCounterPins: process(IOBits,MuxedQCtrSel)
+		DoMuxedQCounterPins: process(IOINS,MuxedQCtrSel)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = MuxedQCountTag then											
 					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function
 						when MuxedQCountQAPin =>
-							MuxedQuadA(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i); 
+							MuxedQuadA(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i); 
 						when MuxedQCountQBPin =>
-							MuxedQuadB(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							MuxedQuadB(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when MuxedQCountIdxPin =>
-							MuxedIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							MuxedIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when MuxedSharedSDQCIdxPin =>
-							MuxedIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							MuxedIndex(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when MuxedQCountIdxMaskPin =>
-							MuxedIndexMask(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							MuxedIndexMask(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when MuxedQCountProbePin =>
-							MuxedProbe <= IOBits(i); -- only 1 please!
+							MuxedProbe <= IOINS(i); -- only 1 please!
 						when others => null;
 					end case;
 				end if;
@@ -1808,11 +1816,11 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 				if ThePinDesc(i+IOWidth)(15 downto 8) = PWMTag then											
 					case (ThePinDesc(i+IOWidth)(7 downto 0)) is	--secondary pin function
 						when PWMAOutPin =>
-							LIOBits(i) <= PWMGENOutA(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
+							lioouts(i) <= PWMGENOutA(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
 						when PWMBDirPin =>
-							LIOBits(i) <= PWMGENOutB(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
+							lioouts(i) <= PWMGENOutB(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
 						when PWMCEnaPin =>
-							LIOBits(i) <= PWMGENOutC(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
+							lioouts(i) <= PWMGENOutC(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
 						when others => null;
 					end case;
 				end if;
@@ -1930,7 +1938,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						when TPPWMEnaPin =>
 							AltData(i) <= TPPWMEna(conv_integer(ThePinDesc(i)(23 downto 16))); 
 						when TPPWMFaultPin =>
-							TPPWMFault(conv_integer(ThePinDesc(i)(23 downto 16))) <= iobits(i); 
+							TPPWMFault(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i); 
 						when others => null;
 					end case;		
 				end if;
@@ -1997,9 +2005,9 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 		DoLocalRCPWMPins: process(RCPWMOut)
 		begin	
 			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 						
-				if ThePinDesc(i+IOWidth)(15 downto 8) = RCPWMTag then											
-					if(ThePinDesc(i+IOWidth)(7 downto 0)) = RCPWMOutPin then
-						LIOBits(i) <= RCPWMOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
+				if ThePinDesc(i)(15 downto 8) = RCPWMTag then											
+					if(ThePinDesc(i)(7 downto 0)) = RCPWMOutPin then
+						lioouts(i) <= RCPWMOut(conv_integer(ThePinDesc(i)(23 downto 16))); 
 					end if;
 				end if;
 			end loop;
@@ -2086,7 +2094,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						when SPIClkPin =>
 							AltData(i) <= SPIClk(conv_integer(ThePinDesc(i)(23 downto 16)));				
 						when SPIInPin =>		
-							SPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							SPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when others => null;
 					end case;
 				end if;
@@ -2158,7 +2166,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ClearBSPIFIFO <= OneOfNDecode(BSPIs,BSPIFIFOCountSel,writestb,A(5 downto 2));
 		end process BSPIDecodeProcess;
 
-		DoBSPIPins: process(BSPIFrame, BSPIOut, BSPIClk, BSPICS, IOBits)
+		DoBSPIPins: process(BSPIFrame, BSPIOut, BSPIClk, BSPICS, IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = BSPITag then											
@@ -2170,7 +2178,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						when BSPIClkPin =>
 							AltData(i) <= BSPIClk(conv_integer(ThePinDesc(i)(23 downto 16)));				
 						when BSPIInPin =>		
-							BSPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							BSPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when others => 
 						   AltData(i) <= BSPICS(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(6 downto 0))-5);
 						   -- magic foo, magic foo, what on earth does it do?						
@@ -2244,7 +2252,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ClearDBSPIFIFO <= OneOfNDecode(DBSPIs,DBSPIFIFOCountSel,writestb,A(5 downto 2));
 		end process DBSPIDecodeProcess;
 
-		DoDBSPIPins: process(DBSPIOut, DBSPIClk, DBSPICS, IOBits)
+		DoDBSPIPins: process(DBSPIOut, DBSPIClk, DBSPICS, IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = DBSPITag then											
@@ -2253,7 +2261,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 							AltData(i) <= DBSPIOut(conv_integer(ThePinDesc(i)(23 downto 16)));				
 						when DBSPIClkPin =>
 							AltData(i) <= DBSPIClk(conv_integer(ThePinDesc(i)(23 downto 16)));											when DBSPIInPin =>		
-							DBSPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							DBSPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when others => 
 							AltData(i) <= DBSPICS(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(6 downto 0))-5);
 				   		-- magic foo, magic foo, what on earth does it do?						
@@ -2263,23 +2271,23 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			end loop;	
 		end process;	
 						
-		DoLocalDDBSPIPins: process(LIOBits,DBSPICS,DBSPIClk,DBSPIOut) -- only for 4I69 LIO currently
+		DoLocalDDBSPIPins: process(lioins,DBSPICS,DBSPIClk,DBSPIOut) -- only for 4I69 LIO currently
 		begin
 			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 
 				report("Doing DBSPI LIOLoop: "& integer'image(i));
 				if ThePinDesc(i+IOWidth)(15 downto 8) = DBSPITag then 	-- GTag (Local I/O starts at end of external I/O)				
 					case (ThePinDesc(i+IOWidth)(7 downto 0)) is	--secondary pin function, drop MSB		
 						when DBSPIOutPin =>
-							LIOBits(i) <= DBSPIOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
+							lioouts(i) <= DBSPIOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
 							report("Local DBSPIOutPin found at LIOBit " & integer'image(i));
 						when DBSPIClkPin =>
-							LIOBits(i) <= DBSPIClk(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
+							lioouts(i) <= DBSPIClk(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
 							report("Local DBSPClkPin found at LIOBit " & integer'image(i));
 						when DBSPIInPin =>		
-							DBSPIIn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= LIOBits(i);
+							DBSPIIn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= lioins(i);
 							report("Local DBSPIInPin found at LIOBit " & integer'image(i));
 						when others => 
-							LIOBits(i) <= DBSPICS(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(6 downto 0))-5);			
+							lioouts(i) <= DBSPICS(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(6 downto 0))-5);			
 							report("Local DBSPICSPin found at LIOBit " & integer'image(i));
 						-- magic foo, magic foo, what on earth does it do?						
 						-- (this needs to written more clearly!)							
@@ -2369,46 +2377,43 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			end if;	
 		end process SSSIDecodeProcess;
 
-		DoSSIPins: process(SSSIClk, IOBits,SSSIDavBits)
+		DoSSIPins: process(SSSIClk, IOINS,SSSIDavBits)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = SSSITag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
-					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function
+					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function, drop MSB
 						when SSSIClkPin =>
 							AltData(i) <= SSSIClk(conv_integer(ThePinDesc(i)(23 downto 16)));				
 						when SSSIClkEnPin =>
 							AltData(i) <= '0';		-- for RS-422 daughtercards that have drive enables				
-						when SSSINClkEnPin =>
-							AltData(i) <= '1';		-- for local connections that have drive enables				
 						when SSSIDAVPin =>
 							AltData(i) <= SSSIDAVBits(conv_integer(ThePinDesc(i)(23 downto 16)));				
 						when SSSIDataPin =>		
-							SSSIData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							SSSIData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when others => null;
 					end case;
 				end if;
 			end loop;	
 		end process;	
-
-		DoLocalSSIPins: process(SSSIClk, LIOBits)
+		DoLocalSSIPins: process(SSSIClk, LIOIns)
 		begin	
 			for i in 0 to LIOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i+IOWidth)(15 downto 8) = SSSITag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					case (ThePinDesc(i+IOWidth)(7 downto 0)) is	--secondary pin function
 						when SSSIClkPin =>
-							LIOBits(i) <= SSSIClk(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
+							LIOOuts(i) <= SSSIClk(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
 							report("Local SSSIClkPin found at LIOBit " & integer'image(i));
 						when SSSIClkEnPin =>
-							LIOBits(i) <= '0';		-- for integrated cards the have low drive enables				
+							LIOOuts(i) <= '0';		-- for integrated cards the have low drive enables				
 							report("Local SSSIClkEnPin found at LIOBit " & integer'image(i));
 						when SSSINClkEnPin =>
-							LIOBits(i) <= '1';		-- for integrated cards the have high drive enables like the 7I76E				
+							LIOOuts(i) <= '1';		-- for integrated cards the have high drive enables like the 7I76E				
 							report("Local SSSINClkEnPin found at LIOBit " & integer'image(i));
 						when SSSIDAVPin =>
-							LIOBits(i) <= SSSIDAVBits(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
+							LIOOuts(i) <= SSSIDAVBits(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
 							report("Local SSSIDAVPin found at LIOBit " & integer'image(i));
 						when SSSIDataPin =>		
-							SSSIData(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= LIOBits(i);
+							SSSIData(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= LIOIns(i);
 							report("Local SSSIDataPin found at LIOBit " & integer'image(i));
 						when others => null;
 					end case;
@@ -2532,7 +2537,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			end if;	
 		end process FAbsDecodeProcess;
 
-		DoFAbsPins: process(FAbsRequest,FAbsTestClk,IOBits)
+		DoFAbsPins: process(FAbsRequest,FAbsTestClk,IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = FAbsTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
@@ -2546,7 +2551,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						when FAbsDAVPin =>
 							AltData(i) <= FAbsDAVBits(conv_integer(ThePinDesc(i)(23 downto 16)));				
 						when FAbsDataPin =>		
-							FAbsData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							FAbsData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when others => null;
 					end case;
 				end if;
@@ -2676,7 +2681,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ReadBISSControl1 <= OneOfNDecode(BISSs,BISSControlSel1,Readstb,A(5 downto 2));
 		end process BISSDecodeProcess;
 
-		DoBISSPins: process(BISSClk, IOBits)
+		DoBISSPins: process(BISSClk, IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = BISSTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
@@ -2692,7 +2697,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						when BISSDAVPin =>
 							AltData(i) <= BISSDAVBits(conv_integer(ThePinDesc(i)(23 downto 16)));				
 						when BISSDataPin =>		
-							BISSData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+							BISSData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 						when others => null;
 					end case;
 				end if;
@@ -2764,15 +2769,15 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			LoadDAQFIFOMode <= OneOfNDecode(DAQFIFOs,DAQFIFOModeSel,writestb,A(5 downto 2)); 
 		end process DAQFIFODecodeProcess;
 
-		DoDAQFIFOPins: process(DAQFIFOFull, IOBits)
+		DoDAQFIFOPins: process(DAQFIFOFull, IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = DAQFIFOTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					if (ThePinDesc(i)(7 downto 0) and x"C0") = x"00" then 	-- DAQ data matches 0X .. 3X
-						DAQFIFOData(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOBits(i);		-- 16 max ports			
+						DAQFIFOData(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOINS(i);		-- 16 max ports			
 					end if;
 					if ThePinDesc(i)(7 downto 0) = DAQFIFOStrobePin then 	
-						 DAQFIFOStrobe(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+						 DAQFIFOStrobe(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 					end if;			
 					if ThePinDesc(i)(7 downto 0) = DAQFIFOFullPin then 	
 						AltData(i) <= DAQFIFOFull(conv_integer(ThePinDesc(i)(23 downto 16)));					
@@ -2866,24 +2871,24 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ReadUARTRModeReg <= OneOfNDecode(UARTs,UARTRModeRegSel,Readstb,A(7 downto 4));
 		end process UARTRDecodeProcess;
 
-		DoUARTRPins: process(IOBits)
+		DoUARTRPins: process(IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = UARTRTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					if (ThePinDesc(i)(7 downto 0)) = URDataPin then
-						URData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+						URData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 					end if;
 				end if;
 			end loop;	
 		end process;
 
-		DoLocalUARTRPins: process(LIOBits) -- only for 4I90 LIO currently
+		DoLocalUARTRPins: process(lioins) -- only for 4I90 LIO currently
 		begin
 			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 
 				report("Doing UARTR LIOLoop: "& integer'image(i));
 				if ThePinDesc(i+IOWidth)(15 downto 8) = UARTRTag then 	-- GTag (Local I/O starts at end of external I/O)				
 					if (ThePinDesc(i+IOWidth)(7 downto 0)) = URDataPin then
-						URData(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= LIOBits(i);
+						URData(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= lioins(i);
 						report("Local URDataPin found at LIOBit " & integer'image(i));
 					end if;
 				end if;	
@@ -2964,10 +2969,10 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 				if ThePinDesc(IOWidth+i)(15 downto 8) = UARTTTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					case (ThePinDesc(IOWidth+i)(7 downto 0)) is	--secondary pin function
 						when UTDataPin =>
-							LIOBits(i) <= UTData(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16)));
+							lioouts(i) <= UTData(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16)));
 							report("Local UTDataPin found at LIOBit " & integer'image(i));	
 						when UTDrvEnPin =>
-							LIOBits(i) <= UTDrvEn(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16))); --LIO is active high enable	
+							lioouts(i) <= UTDrvEn(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16))); --LIO is active high enable	
 							report("Local UTDrvEnPin found at LIOBit " & integer'image(i));
 						when others => null;								
 					end case;
@@ -3060,24 +3065,24 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 		
 		end process PktUARTRDecodeProcess;
 
-		DoPktUARTRPins: process(IOBits)
+		DoPktUARTRPins: process(IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = PktUARTRTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					if (ThePinDesc(i)(7 downto 0)) = PktURDataPin then
-						PktURData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+						PktURData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 					end if;
 				end if;
 			end loop;	
 		end process;
 
-		DoLocalPktUARTRPins: process(LIOBits) -- only for 4I90 LIO currently
+		DoLocalPktUARTRPins: process(lioins) -- only for 4I90 LIO currently
 		begin
 			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 
 				report("Doing PktUARTR LIOLoop: "& integer'image(i));
 				if ThePinDesc(i+IOWidth)(15 downto 8) = PktUARTRTag then 	-- GTag (Local I/O starts at end of external I/O)				
 					if (ThePinDesc(i+IOWidth)(7 downto 0)) = PktURDataPin then
-						PktURData(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= LIOBits(i);
+						PktURData(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= lioins(i);
 						report("Local PktURDataPin found at LIOBit " & integer'image(i));
 					end if;
 				end if;	
@@ -3158,10 +3163,10 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 				if ThePinDesc(IOWidth+i)(15 downto 8) = PktUARTTTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					case (ThePinDesc(IOWidth+i)(7 downto 0)) is	--secondary pin function
 						when PktUTDataPin =>
-							LIOBits(i) <= PktUTData(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16)));
+							lioouts(i) <= PktUTData(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16)));
 							report("Local PktUTDataPin found at LIOBit " & integer'image(i));	
 						when UTDrvEnPin =>
-							LIOBits(i) <= PktUTDrvEn(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16))); --LIO is active high enable	
+							lioouts(i) <= PktUTDrvEn(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16))); --LIO is active high enable	
 							report("Local PktUTDrvEnPin found at LIOBit " & integer'image(i));
 						when others => null;								
 					end case;
@@ -3214,7 +3219,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 		begin
 			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 
 				if ThePinDesc(i+IOWidth)(15 downto 8) = BinOscTag then	-- GTag (Local I/O starts at end of external I/O)				
-					LIOBits(i) <= BinOscOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWIDTH)(6 downto 0))-1);						
+					lioouts(i) <= BinOscOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWIDTH)(6 downto 0))-1);						
 					report("Local BinOscOutPin found");
 				end if;	
 			end loop;		
@@ -3275,10 +3280,10 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 				if ThePinDesc(i+IOWidth)(15 downto 8) = CPDriveTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					case (ThePinDesc(i+IOWidth)(7 downto 0)) is	--secondary pin function
 						when CPDriveHighPin =>
-							LIOBits(i) <= CPDriveHigh(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));
+							lioouts(i) <= CPDriveHigh(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));
 							report("Local CPDriveHighPin found");							
 						when CPDriveLowPin =>
-							LIOBits(i) <= CPDriveLow(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
+							lioouts(i) <= CPDriveLow(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
 							report("Local CPDriveLowPin found");							
 						when others => null;								
 					end case;
@@ -3372,7 +3377,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			LoadInMuxMPGCount <= OneOfNDecode(InMuxes,InMuxMPGCountSel,Writestb,A(7 downto 2));	
 		end process InMuxDecodeProcess;
 		
-		DoInMuxPins: process(IOBits,InMuxAddr,InMuxData)
+		DoInMuxPins: process(IOINS,InMuxAddr,InMuxData)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = InMuxTag then											
@@ -3380,7 +3385,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						AltData(i) <= InMuxAddr(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(6 downto 0))-1);						
 					end if;
 					if (ThePinDesc(i)(7 downto 0)) = InMuxDataPin then	--secondary pin function
-						InMuxData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+						InMuxData(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 					end if;
 				end if;
 			end loop;
@@ -3471,12 +3476,12 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			LoadInMMPGCount <= OneOfNDecode(InMs,InMMPGCountSel,writestb,A(7 downto 2));	
 		end process InMDecodeProcess;
 		
-		DoInMPins: process(IOBits,InMData)
+		DoInMPins: process(IOINS,InMData)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = InMTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					if (ThePinDesc(i)(7 downto 0) and x"C0") = x"00" then 	-- ins match 0X .. 3X
-						InMData(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOBits(i);			
+						InMData(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOINS(i);			
 					end if;
 				end if;
 			end loop;
@@ -3632,7 +3637,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			LoadDPainterData <= OneOfNDecode(DPainters,DPainterDataSel,writestb,A(7 downto 2));
 		end process DPainterDecodeProcess;
 		
-		DoDPainterPins: process(IOBits,DPainterData,DPainterClk)
+		DoDPainterPins: process(IOINS,DPainterData,DPainterClk)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = DPainterTag then											
@@ -3652,8 +3657,6 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 	end generate makedpainters;
 
 	makexy2mods: if XY2Mods >0 generate
-	use ieee.math_real.all;
-   use ieee.numeric_std.all;
 
 	constant defaultdivisor : real := round((real(ClockLow)/2000000.0)) -1.0; -- nominal 2 MHz
 	constant shiftdiv : unsigned := (to_unsigned(integer(defaultdivisor),8));
@@ -3870,7 +3873,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			ReadXY2ModTimerWSelect <= OneOfNDecode(XY2Mods,XY2ModTimerWSelectSel,Readstb,A(7 downto 2));
 		end process XY2ModDecodeProcess;
 		
-		DoXY2ModPins: process(IOBits,XY2ModDataX,XY2ModDataY,XY2ModDataClk,XY2ModSync,XY2ModStatus)
+		DoXY2ModPins: process(IOINS,XY2ModDataX,XY2ModDataY,XY2ModDataClk,XY2ModSync,XY2ModStatus)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = XY2ModTag then											
@@ -3888,7 +3891,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 							AltData(i) <=  XY2ModSync(conv_integer(ThePinDesc(i)(23 downto 16)));
 							report("XY2Mod Sync found");							
 						when XY2ModStatusPin  =>
-							XY2ModStatus(conv_integer(ThePinDesc(i)(23 downto 16))) <= iobits(i); 
+							XY2ModStatus(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i); 
 							report("XY2Mod Status found");							
 						when others => null;								
 					end case;
@@ -3914,7 +3917,8 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			aXfrmrOut: entity work.xfrmrout
 			generic map (
 				clock=> ClockLow,
-				pins => MaxXfrmrOutPins)			
+				pins => MaxXfrmrOutPins				
+				)
 			port map ( 
 				ibus => ibus,
 				obus => obus,
@@ -3995,8 +3999,11 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = OutMTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
-					if (ThePinDesc(i)(7 downto 0) and x"C0") = x"80" then 	-- outs match 8X .. BX 
-						AltData(i) <=  OutMOut(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1);	--  max ports, more than 8 requires adding to IDROM pins					
+					if (ThePinDesc(i)(7 downto 0) and x"C0") = x"80" then 	-- outs match 8X .. BX active low
+						AltData(i) <=  not OutMOut(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1); --  max ports = 8 					
+					end if;
+					if (ThePinDesc(i)(7 downto 0) and x"C0") = x"C0" then 	-- outs match CX .. active high
+						AltData(i) <=  OutMOut(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1);	--  max ports = 8 					
 					end if;
 				end if;
 			end loop;	
@@ -4101,6 +4108,131 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			end loop;	
 		end process;
 	end generate;
+
+	MakeOneShotmod:  if OneShots > 0 generate	
+
+	signal LoadOSPW1: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSPW2: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSFilter1: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSFilter2: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSRate: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSControl: std_logic_vector(OneShots -1 downto 0);
+	signal ReadOSControl: std_logic_vector(OneShots -1 downto 0);
+	signal OSPulseOut1: std_logic_vector(OneShots -1 downto 0);
+	signal OSPulseOut2: std_logic_vector(OneShots -1 downto 0);
+	signal OSTrigger1: std_logic_vector(OneShots -1 downto 0);
+ 	signal OSTrigger2: std_logic_vector(OneShots -1 downto 0);
+	signal OSPW1Sel : std_logic;
+	signal OSPW2Sel : std_logic;
+	signal OSFilter1Sel : std_logic;
+	signal OSFilter2Sel : std_logic;
+	signal OSRateSel: std_logic;
+	signal OSControlSel: std_logic;	
+	
+	begin	
+	MakeOneShots : for i in 0 to OneShots-1 generate
+		oneshotx: entity work.oneshot
+		port map (
+		    clk => clklow,
+	        ibus => ibus,
+	        obus => obus,
+            loadpw1 => LoadOSPW1(i),
+            loadpw2 => LoadOSPW2(i),
+		    loadfilter1 => LoadOSFilter1(i),	  
+		    loadfilter2 => LoadOSFilter2(i),
+		    loadrate => LoadOSRate(i),
+            loadcontrol => LoadOSControl(i),
+		    readcontrol => ReadOSControl(i),		  
+		    timers => RateSources,
+		    pulse1out => OSPulseOut1(i),
+		    pulse2out => OSPulseOut2(i),
+		    hwtrigger1 => OSTrigger1(i),
+		    hwtrigger2 => OSTrigger2(i)
+		);		
+		end generate;
+		
+		OneShotDecodeProcess : process (A,Readstb,writestb,OSPW1Sel, OSPW2Sel, 
+									    OSFilter1Sel,OSFilter2Sel, OSRateSel,OSControlSel)
+		begin
+			if A(15 downto 8) = OneShotPW1Addr then
+				OSPW1Sel <= '1';
+			else
+				OSPW1Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotPW2Addr then
+				OSPW2Sel <= '1';
+			else
+				OSPW2Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotFilter1Addr then
+				OSFilter1Sel <= '1';
+			else
+				OSFilter1Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotFilter2Addr then
+				OSFilter2Sel <= '1';
+			else
+				OSFilter2Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotRateAddr then
+				OSRateSel <= '1';
+			else
+				OSRateSel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotControlAddr then
+				OSControlSel <= '1';
+			else
+				OSControlSel <= '0';
+			end if;
+			
+			LoadOSPW1 <= OneOfNDecode(OneShots,OSPW1Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSPW2 <= OneOfNDecode(OneShots,OSPW2Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSFilter1 <= OneOfNDecode(OneShots,OSFilter1Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSFilter2 <= OneOfNDecode(OneShots,OSFilter2Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSRate <= OneOfNDecode(OneShots,OSRateSel,writestb,A(7 downto 2));
+			LoadOSControl <= OneOfNDecode(OneShots,OSControlSel,writestb,A(7 downto 2));
+			ReadOSControl <= OneOfNDecode(OneShots,OSControlSel,readstb,A(7 downto 2));
+		end process OneShotDecodeProcess;
+		
+		DoOneShotPins: process(OSPulseOut1,OSPulseOut2,ioins)
+		begin	
+			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
+				if ThePinDesc(i)(15 downto 8) = OneShotTag then											
+					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function
+						when OneShotOut1Pin =>
+							AltData(i) <= OSPulseOut1(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotOut2Pin =>
+							AltData(i) <= OSPulseOut2(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotTrig1Pin =>
+							OSTrigger1(conv_integer(ThePinDesc(i)(23 downto 16))) <= ioins(i); 
+						when OneShotTrig2Pin =>
+							OSTrigger2(conv_integer(ThePinDesc(i)(23 downto 16))) <= ioins(i); 
+						when others => null;
+					end case;
+				end if;
+			end loop;
+		end process;	
+	
+		DoLocalOneShotPins: process(OSPulseOut1,OSPulseOut2,lioins)
+		begin	
+			for i in 0 to LIOWidth -1 loop				-- loop through all the external I/O pins 
+				if ThePinDesc(i+IOWidth)(15 downto 8) = OneShotTag then											
+					case (ThePinDesc(i+IOWidth)(7 downto 0)) is	--secondary pin function
+						when OneShotOut1Pin =>
+							lioouts(i) <= OSPulseOut1(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotOut2Pin =>
+							lioouts(i) <= OSPulseOut2(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotTrig1Pin =>
+							OSTrigger1(conv_integer(ThePinDesc(i)(23 downto 16))) <= lioins(i); 
+						when OneShotTrig2Pin =>
+							OSTrigger2(conv_integer(ThePinDesc(i)(23 downto 16))) <= lioins(i); 
+						when others => null;
+					end case;
+				end if;
+			end loop;
+		end process;	
+		
+	end generate MakeOneShotMod;
 	
 	makeresolvermod:  if ResolverMods >0  generate	
 	signal LoadResModCommand: std_logic_vector(ResolverMods -1 downto 0);
@@ -4219,9 +4351,9 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						when ResModTestBitPin =>
 							AltData(i) <= ResModTestBit(conv_integer(ThePinDesc(i)(23 downto 16))); 
 						when ResModSPIDI0Pin =>
-							ResModSPIDI0(conv_integer(ThePinDesc(i)(23 downto 16))) <= iobits(i); 
+							ResModSPIDI0(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i); 
 						when ResModSPIDI1Pin =>
-							ResModSPIDI1(conv_integer(ThePinDesc(i)(23 downto 16))) <= iobits(i); 
+							ResModSPIDI1(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i); 
 						when others => null;
 					end case;
 				end if;
@@ -4346,7 +4478,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 
 		end process SSerialDecodeProcess;
 
-		DoSSerialPins: process(SSerialTX, SSerialTXEn, SSerialNTXEn, SSerialTestBits, IOBits)
+		DoSSerialPins: process(SSerialTX, SSerialTXEn, SSerialNTXEn, SSerialTestBits, IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = SSerialTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
@@ -4360,7 +4492,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						AltData(i) <= not SSerialNTXEn(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
 					end if;
 					if (ThePinDesc(i)(7 downto 0) and x"F0") = x"00" then 	-- rxins match 0X
-						SSerialRX(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1) <= IOBits(i);		-- 16 max ports			
+						SSerialRX(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1) <= IOINS(i);		-- 16 max ports			
 					end if;
 					if ThePinDesc(i)(7 downto 0) = SSerialTestPin then
 						AltData(i) <= SSerialTestBits(i);
@@ -4369,24 +4501,24 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			end loop;
 		end process;	
 		
-		DoLocalSSerialPins: process(SSerialTX, SSerialTXEn, SSerialNTXEn, LIOBits)
+		DoLocalSSerialPins: process(SSerialTX, SSerialTXEn, SSerialNTXEn, lioins)
 		begin	
 			for i in 0 to LIOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i+IOWidth)(15 downto 8) = SSerialTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"80" then 	-- txouts match 8X 
-						LIOBits(i) <=   SSerialTX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1);	-- 16 max ports			
+						lioouts(i) <=   SSerialTX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1);	-- 16 max ports			
 						report("Local SSerialTXPin found at LIOBit " & integer'image(i));
 					end if;
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"90" then 	-- txens match 9X
-						LIOBits(i) <= not SSerialTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
+						lioouts(i) <= not SSerialTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
 						report("Local SSerialTXEnPin found at LIOBit " & integer'image(i));
 					end if;
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"A0" then 	-- ntxens match AX
-						LIOBits(i) <= not SSerialNTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
+						lioouts(i) <= not SSerialNTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
 						report("Local PSSerialNTXEnPin found at LIOBit " & integer'image(i));
 					end if;
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"00" then 	-- rxins match 0X
-						SSerialRX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= LIOBits(i);		-- 16 max ports			
+						SSerialRX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= lioins(i);		-- 16 max ports			
 						report("Local SSerialRXPin found at LIOBit " & integer'image(i));
 					end if;
 				end if;
@@ -4560,7 +4692,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 
 		end process sserialbDecodeProcess;
 
-		DosserialbPins: process(sserialbTX, sserialbTXEn, sserialbNTXEn, sserialbTestBits, IOBits)
+		DosserialbPins: process(sserialbTX, sserialbTXEn, sserialbNTXEn, sserialbTestBits, IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = sserialbTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
@@ -4574,7 +4706,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						AltData(i) <= not sserialbNTXEn(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
 					end if;
 					if (ThePinDesc(i)(7 downto 0) and x"F0") = x"00" then 	-- rxins match 0X
-						sserialbRX(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1) <= IOBits(i);		-- 16 max ports			
+						sserialbRX(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1) <= IOINS(i);		-- 16 max ports			
 					end if;
 					if ThePinDesc(i)(7 downto 0) = sserialbTestPin then
 						AltData(i) <= sserialbTestBits(i);
@@ -4583,24 +4715,24 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			end loop;
 		end process;		
 
-		DoLocalSSerialbPins: process(SSerialbTX, SSerialbTXEn, SSerialbNTXEn, LIOBits)
+		DoLocalSSerialbPins: process(SSerialbTX, SSerialbTXEn, SSerialbNTXEn, lioins)
 		begin	
 			for i in 0 to LIOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i+IOWidth)(15 downto 8) = SSerialbTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"80" then 	-- txouts match 8X 
-						LIOBits(i) <=   SSerialbTX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1);	-- 16 max ports			
+						lioouts(i) <=   SSerialbTX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1);	-- 16 max ports			
 						report("Local SSerialbTXPin found at LIOBit " & integer'image(i));
 					end if;
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"90" then 	-- txens match 9X
-						LIOBits(i) <= not SSerialbTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
+						lioouts(i) <= not SSerialbTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
 						report("Local SSerialbTXEnPin found at LIOBit " & integer'image(i));
 					end if;
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"A0" then 	-- ntxens match AX
-						LIOBits(i) <= not SSerialbNTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
+						lioouts(i) <= not SSerialbNTXEn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i)(3 downto 0))-1); 	-- 16 max ports						
 						report("Local PSSerialbNTXEnPin found at LIOBit " & integer'image(i));
 					end if;
 					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"00" then 	-- rxins match 0X
-						SSerialbRX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= LIOBits(i);		-- 16 max ports			
+						SSerialbRX(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= lioins(i);		-- 16 max ports			
 						report("Local SSerialbRXPin found at LIOBit " & integer'image(i));
 					end if;
 				end if;
@@ -4684,10 +4816,10 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						AltData(i) <=   TwiddlerOutput(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1);	--  max ports, more than 8 requires adding to IDROM pins					
 					end if;
 					if (ThePinDesc(i)(7 downto 0) and x"C0") = x"00" then 	-- ins match 0X .. 3X
-						TwiddlerInput(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOBits(i);		-- 16 max ports			
+						TwiddlerInput(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOINS(i);		-- 16 max ports			
 					end if;
 					if (ThePinDesc(i)(7 downto 0) and x"C0") = x"C0" then 	-- I/Os match CX .. FX
-						TwiddlerInput(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOBits(i);		-- 16 max ports			
+						TwiddlerInput(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(5 downto 0))-1) <= IOINS(i);		-- 16 max ports			
 						AltData(i) <= TwiddlerOutput(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(4 downto 0))-1); 	-- 16 max ports						
 					end if;
 				end if;
@@ -4726,15 +4858,15 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 				);
 		end generate;
 			
-		DoScalerCounterPins: process(IOBits)
+		DoScalerCounterPins: process(IOINS)
 		begin	
 			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
 				if ThePinDesc(i)(15 downto 8) = ScalerCounterTag then 	-- this hideous masking of pinnumbers/vs pintype is why they should be separate bytes, maybe IDROM type 4...											
 					if (ThePinDesc(i)(7 downto 0)) = ScalerCounterInA then
-						SCCountInA(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+						SCCountInA(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 					end if;
 					if (ThePinDesc(i)(7 downto 0)) = ScalerCounterInB then
-						SCCountInB(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+						SCCountInB(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOINS(i);
 					end if;
 				end if;
 			end loop;	
@@ -4766,89 +4898,89 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 		
 	end generate;	
 
-	makedsads: if DSADs >0 generate -- note	
-	
-	type DSADCompInPType is array(DSADs-1 downto 0) of std_logic_vector(MaxDSADChannels-1 downto 0);
-	type DSADCompInNType is array(DSADs-1 downto 0) of std_logic_vector(MaxDSADChannels-1 downto 0);
-	type DSADFBOutType is array(DSADs-1 downto 0) of std_logic_vector(MaxDSADChannels-1 downto 0);
-	signal DSADSel: std_logic;
-	signal ReadDSADData: std_logic_vector(DSADs-1 downto 0);
-	signal LoadDSADCont: std_logic_vector(DSADs-1 downto 0);
-	signal DSADPWM: std_logic_vector(DSADs-1 downto 0);
-	signal DSADCompInP: DSADCompInPType;
-	signal DSADCompInN: DSADCompInNType;
-	signal DSADFBOut: DSADFBOutType;
-
-	begin
-
-		makedsads: for i in 0 to DSADs-1 generate
-			dsadx: entity work.simpledsad 
-				generic map (
-					channels => MaxDSADChannels,
-					buswidth => BusWidth
-				)		
-				port map (
-					clk  => clklow,
-					ibus => ibus,
-					obus => obus,
-					a => A(5 downto 2),
-					readdata => ReadDSADData(i),
-					loadcontrol => LoadDSADCont(i),
-					compin_p => DSADCompInP(i),
-					compin_n => DSADCompInN(i),
-					fbout => DSADFBOut(i),
-					pwmout => DSADPWM(i)
-				);
-		end generate;
-			
-		DoLocalDSADPins: process(LIOBits,DSADCompInP,DSADCompInN,DSADFBOut,DSADPWM) -- only for 7IA0 LIO currently
-		begin
-			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 
-				report("Doing DSAD LIOLoop: "& integer'image(i));
-				if ThePinDesc(i+IOWidth)(15 downto 8) = DSADTag then 	-- GTag (Local I/O starts at end of external I/O)				
-					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"00" then 	-- CompInPs match 0X .. 
-						report("Local DSADCompIn P Pin found at LIOBit " & integer'image(i));
-						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
-						report("Channel: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1));
-						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
-						DSADCompInP(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= LIOBits(i);		-- 16 max ports			
-					end if;
-					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"10" then 	-- CompInNs match 1X .. 
-						report("Local DSADCompIn N Pin found at LIOBit " & integer'image(i));
-						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
-						report("Channel: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1));
-						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
-						DSADCompInN(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= LIOBits(i);		-- 16 max ports			
-					end if;
-					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"80" then 	-- FBOuts match 8X .. 
-						report("Local DSADFBOut Pin found at LIOBit " & integer'image(i));
-						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
-						report("Channel: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1));
-						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
-						LIOBits(i) <= DSADFBOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1);						
-					end if;			
-					if (ThePinDesc(i+IOWidth)(7 downto 0)) = DSADPWMPin then
-						LIOBits(i) <= DSADPWM(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
-						report("Local DSADPWM Pin found at LIOBit " & integer'image(i));
-						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
-						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
-					end if;		
-				end if;	
-			end loop;		
-		end process;	
-	
-		DSADDecodeProcess : process (A,Readstb,writestb,DSADSel)
-		begin		
-			if A(15 downto 8) = DSADAddr then	 --  
-				DSADSel <= '1';
-			else
-				DSADSel <= '0';
-			end if;		
-			ReadDSADData <= OneOfNDecode(DSADs,DSADSel,readstb,A(7 downto 6)); -- 4 max 
-			LoadDSADCont <= OneOfNDecode(DSADs,DSADSel,writestb,A(7 downto 6)); 
-		end process DSADDecodeProcess;
-		
-	end generate;	
+--	makedsads: if DSADs >0 generate -- note	
+--	
+--	type DSADCompInPType is array(DSADs-1 downto 0) of std_logic_vector(MaxDSADChannels-1 downto 0);
+--	type DSADCompInNType is array(DSADs-1 downto 0) of std_logic_vector(MaxDSADChannels-1 downto 0);
+--	type DSADFBOutType is array(DSADs-1 downto 0) of std_logic_vector(MaxDSADChannels-1 downto 0);
+--	signal DSADSel: std_logic;
+--	signal ReadDSADData: std_logic_vector(DSADs-1 downto 0);
+--	signal LoadDSADCont: std_logic_vector(DSADs-1 downto 0);
+--	signal DSADPWM: std_logic_vector(DSADs-1 downto 0);
+--	signal DSADCompInP: DSADCompInPType;
+--	signal DSADCompInN: DSADCompInNType;
+--	signal DSADFBOut: DSADFBOutType;
+--
+--	begin
+--
+--		makedsads: for i in 0 to DSADs-1 generate
+--			dsadx: entity work.simpledsad 
+--				generic map (
+--					channels => MaxDSADChannels,
+--					buswidth => BusWidth
+--				)		
+--				port map (
+--					clk  => clklow,
+--					ibus => ibus,
+--					obus => obus,
+--					a => A(5 downto 2),
+--					readdata => ReadDSADData(i),
+--					loadcontrol => LoadDSADCont(i),
+--					compin_p => DSADCompInP(i),
+--					compin_n => DSADCompInN(i),
+--					fbout => DSADFBOut(i),
+--					pwmout => DSADPWM(i)
+--				);
+--		end generate;
+--			
+--		DoLocalDSADPins: process(lioins,DSADCompInP,DSADCompInN,DSADFBOut,DSADPWM) -- only for 7IA0 LIO currently
+--		begin
+---			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 
+--				report("Doing DSAD LIOLoop: "& integer'image(i));
+--				if ThePinDesc(i+IOWidth)(15 downto 8) = DSADTag then 	-- GTag (Local I/O starts at end of external I/O)				
+--					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"00" then 	-- CompInPs match 0X .. 
+--						report("Local DSADCompIn P Pin found at LIOBit " & integer'image(i));
+--						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
+--						report("Channel: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1));
+--						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
+--						DSADCompInP(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= lioins(i);		-- 16 max ports			
+--					end if;
+--					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"10" then 	-- CompInNs match 1X .. 
+--						report("Local DSADCompIn N Pin found at LIOBit " & integer'image(i));
+--						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
+--						report("Channel: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1));
+--						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
+--						DSADCompInN(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1) <= lioins(i);		-- 16 max ports			
+--					end if;
+--					if (ThePinDesc(i+IOWidth)(7 downto 0) and x"F0") = x"80" then 	-- FBOuts match 8X .. 
+--						report("Local DSADFBOut Pin found at LIOBit " & integer'image(i));
+--						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
+--						report("Channel: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1));
+--						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
+--						lioins(i) <= DSADFBOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(3 downto 0))-1);						
+--					end if;			
+--					if (ThePinDesc(i+IOWidth)(7 downto 0)) = DSADPWMPin then
+--						lioins(i) <= DSADPWM(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))); 
+--						report("Local DSADPWM Pin found at LIOBit " & integer'image(i));
+--						report("Module: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))));
+--						report("PinTag: " & integer'image(conv_integer(ThePinDesc(i+IOWidth)(7 downto 0))));
+--					end if;		
+--				end if;	
+--			end loop;		
+--		end process;	
+--	
+--		DSADDecodeProcess : process (A,Readstb,writestb,DSADSel)
+--		begin		
+--			if A(15 downto 8) = DSADAddr then	 --  
+--				DSADSel <= '1';
+--			else
+--				DSADSel <= '0';
+--			end if;		
+--			ReadDSADData <= OneOfNDecode(DSADs,DSADSel,readstb,A(7 downto 6)); -- 4 max 
+--			LoadDSADCont <= OneOfNDecode(DSADs,DSADSel,writestb,A(7 downto 6)); 
+--		end process DSADDecodeProcess;
+--		
+--	end generate;	
 
 	
 	LEDReg : entity work.boutreg 

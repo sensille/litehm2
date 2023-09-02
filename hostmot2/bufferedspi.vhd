@@ -148,77 +148,46 @@ alias CSTimerDone: std_logic is CSTimer(4);
 	signal desc: std_logic_vector(31 downto 0);
 	alias CSTimerFromDesc : std_logic_vector(4 downto 0) is desc(28 downto 24);
 	signal descptr: std_logic_vector(3 downto 0);
-	
-	
-
-  component SRL16E
---
-    generic (INIT : bit_vector);
-
-
---
-    port (D   : in  std_logic;
-          CE  : in  std_logic;
-          CLK : in  std_logic;
-          A0  : in  std_logic;
-          A1  : in  std_logic;
-          A2  : in  std_logic;
-          A3  : in  std_logic;
-          Q   : out std_logic); 
-  end component;
-	
-			
+		
  
 begin 
 
 	ofifo: for i in 0 to 35 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => opushdata(i),
+          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => opushdata(i),
           CE  => hostpush,
           CLK => clk,
-          A0  => opopadd(0),
-          A1  => opopadd(1),
-          A2  => opopadd(2),
-          A3  => opopadd(3),
+          A   => opopadd,
           Q   => opopdata(i)
 			);	
   	end generate;
 
 	ififo: for i in 0 to 31 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => SPISReg(i),
+	  asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => SPISReg(i),
           CE  => ipush,
           CLK => clk,
-          A0  => ipopadd(0),
-          A1  => ipopadd(1),
-          A2  => ipopadd(2),
-          A3  => ipopadd(3),
+          A  => ipopadd,
           Q   => ipopdata(i)
 			);	
   	end generate;
 
 	autosendtable: for i in 0 to 35 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => opushdata(i),
+          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => opushdata(i),
           CE  => loadasend,
           CLK => clk,
-          A0  => autosendadd(0),
-          A1  => autosendadd(1),
-          A2  => autosendadd(2),
-          A3  => autosendadd(3),
+          A   => autosendadd,
           Q   => autosenddata(i)
 			);	
   	end generate;
 
 	chandesc: for i in 0 to 31 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => ibus(i),
+          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => ibus(i),
           CE  => loaddesc,
           CLK => clk,
-          A0  => descptr(0),			-- the address that was pushed
-          A1  => descptr(1),
-          A2  => descptr(2),
-          A3  => descptr(3),
+          A  => descptr,			-- the address that was pushed
           Q   => desc(i)
 			);	
   	end generate;	

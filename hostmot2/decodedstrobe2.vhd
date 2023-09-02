@@ -1,9 +1,9 @@
 library IEEE;
-use IEEE.std_logic_1164.all;  -- defines std_logic types
-use IEEE.std_logic_ARITH.ALL;
+use IEEE.std_logic_1164.all;
 use IEEE.std_logic_UNSIGNED.ALL;
+use IEEE.std_logic_ARITH.ALL;
 --
--- Copyright (C) 2007, Peter C. Wallace, Mesa Electronics
+-- Copyright (C) 2009, Peter C. Wallace, Mesa Electronics
 -- http://www.mesanet.com
 --
 -- This program is is licensed under a disjunctive dual license giving you
@@ -67,28 +67,23 @@ use IEEE.std_logic_UNSIGNED.ALL;
 --     POSSIBILITY OF SUCH DAMAGE.
 -- 
 
-entity srl16delay is
-  generic (width : integer);
-  Port ( clk : in  STD_LOGIC;
-         dlyin : in  STD_LOGIC_VECTOR (width-1 downto 0);
-         dlyout : out  STD_LOGIC_VECTOR (width-1 downto 0);
-         delay : in  STD_LOGIC_VECTOR (3 downto 0));
-end srl16delay;
+package decodedstrobe2 is
+	function decodedstrobe2(paddr: in std_logic_vector;maddr: in std_logic_vector;ena1 : in std_logic;ena2: in std_logic) return std_logic;
+end decodedstrobe2;
 
-architecture Behavioral of srl16delay is
-
-			
-begin
-
-	fifosrl0: for i in 0 to width-1 generate
-          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
-          D   => dlyin(i),
-          CE  => '1',
-          CLK => clk,
-          A   => delay,
-          Q   => dlyout(i)
-			);	
-  	end generate;
-
-end Behavioral;
+package body decodedstrobe2 is
+	
+	function decodedstrobe2(paddr: in std_logic_vector;maddr: in std_logic_vector;ena1: in std_logic;ena2: in std_logic)
+	return std_logic is
+	variable result: std_logic;
+	begin
+		if (paddr=maddr) and (ena1 = '1') and (ena2 = '1') then
+			result := '1';
+		else
+			result := '0';
+		end if;	
+		return result;
+	end;
+	
+end decodedstrobe2;
 

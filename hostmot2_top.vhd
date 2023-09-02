@@ -2,8 +2,8 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
-library UNISIM;
-use UNISIM.VComponents.all;
+--library UNISIM;
+--use UNISIM.VComponents.all;
 
 use work.consts_gen.all;
 use work.IDROMConst.all;
@@ -40,8 +40,9 @@ entity TopHostMot2 is
 		int: out std_logic; 
 		dreq: out std_logic;
 		demandmode: out std_logic;
-		iobits: inout std_logic_vector (IOWidth -1 downto 0);
-		liobits: inout std_logic_vector (LIOWidth -1 downto 0);
+		ioins: in std_logic_vector (IOWidth -1 downto 0);
+		ioouts: out std_logic_vector (IOWidth -1 downto 0);
+		ioenas: out std_logic_vector (IOWidth -1 downto 0);
 		rates: out std_logic_vector (4 downto 0);
 		leds: out std_logic_vector(ledcount-1 downto 0);
 		wdlatchedbite: out std_logic
@@ -49,6 +50,9 @@ entity TopHostMot2 is
 end TopHostMot2;
 
 architecture Behavioral of TopHostMot2 is
+
+signal lioins: std_logic_vector (LIOWidth -1 downto 0);
+signal lioouts: std_logic_vector (LIOWidth -1 downto 0);
 
 begin
 
@@ -94,8 +98,11 @@ ahostmot2: entity work.HostMot2
 		int => int, 
 		dreq => dreq,
 		demandmode => demandmode,
-		iobits => iobits,
-		liobits => liobits,
+		ioins => ioins,
+		ioouts => ioouts,
+		ioenas => ioenas,
+		lioins => lioins,
+		lioouts => lioouts,
 		rates => rates,
 		leds => leds,
 		wdlatchedbite => wdlatchedbite 
