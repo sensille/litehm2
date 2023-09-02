@@ -8,6 +8,7 @@ from litex.soc.integration.soc import SoCRegion
 from litex.soc.interconnect import wishbone
 from litex.soc.interconnect.csr import *
 from litex.build.generic_platform import *
+from litex.build.vhd2v_converter import *
 
 func_lines = {
     'stepgen':
@@ -156,13 +157,13 @@ pin_subfuncs = {
 }
 
 pin_lines = {
-    'stepgen': 'IOPortTag & x"{:02x}" & StepGenTag & {}',
-    'pwm': 'IOPortTag & x"{:02x}" & PWMTag & {}',
-    'gpio': 'IOPortTag & x"{:02x}" & NullTag & x"00"',
-    'qcount': 'IOPortTag & x"{:02x}" & QCountTag & {}',
-    'inm': 'IOPortTag & x"{:02x}" & InMTag & {}',
-    'inmux': 'IOPortTag & x"{:02x}" & InMuxTag & {}',
-    'sserial': 'IOPortTag & x"{:02x}" & SSerialTag & {}',
+    'stepgen': 'std_logic_vector\'(IOPortTag & x"{:02x}" & StepGenTag & {})',
+    'pwm': 'std_logic_vector\'(IOPortTag & x"{:02x}" & PWMTag & {})',
+    'gpio': 'std_logic_vector\'(IOPortTag & x"{:02x}" & NullTag & x"00")',
+    'qcount': 'std_logic_vector\'(IOPortTag & x"{:02x}" & QCountTag & {})',
+    'inm': 'std_logic_vector\'(IOPortTag & x"{:02x}" & InMTag & {})',
+    'inmux': 'std_logic_vector\'(IOPortTag & x"{:02x}" & InMuxTag & {})',
+    'sserial': 'std_logic_vector\'(IOPortTag & x"{:02x}" & SSerialTag & {})',
 }
 
 consts_header = """
@@ -207,25 +208,19 @@ end package consts_gen;
 """
 
 class HostMot2(Module, AutoCSR):
-    def __init__(self, soc, sys_clk_freq, fast_clk_freq, with_leds=False,
-            config='board.conf', builddir='build'):
+    def __init__(self, soc, sys_clk_freq, fast_clk_freq, leds=None,
+            with_converter=False, config=None, builddir='build'):
         platform = soc.platform
 
-        leds = 1
-        if with_leds:
-            # CPU owns the LEDs
-            leds = 0
+        if config is None:
+            raise ValueError("no config given")
 
         #
         # read board config
         #
         aliases = {}
         apins = {}
-        board = 'rv901t'
-        driver_direction = 'input'
-        serial = 'yes'
-        cfg = open(config, 'r')
-        for line in cfg:
+        for line in config:
             line = re.sub('#.*$', '', line)
             line = line.rstrip()
             line = line.lstrip()
@@ -248,29 +243,6 @@ class HostMot2(Module, AutoCSR):
                     apins[toks[1]] = toks[2]
                 else:
                     apins[toks[1]] = 'gpio.0'
-            elif toks[0] == 'board':
-                if len(toks) != 2:
-                    raise ValueError("parsing board config fails, line {}"
-                        .format(line))
-                if toks[1] != 'rv901t':
-                    raise ValueError("unknown board {}".format(toks[1]))
-                board = toks[1]
-            elif toks[0] == 'driver_direction':
-                if len(toks) != 2:
-                    raise ValueError("parsing board config fails, line {}"
-                        .format(line))
-                if toks[1] not in ['input', 'output']:
-                    raise ValueError("invalid driver direction, only 'input'" +
-                        " and 'output' are valid")
-                driver_direction = toks[1]
-            elif toks[0] == 'serial':
-                if len(toks) != 2:
-                    raise ValueError("parsing board config fails, line {}"
-                        .format(line))
-                if toks[1] not in ['no', 'yes']:
-                    raise ValueError("invalid serial directive, only 'no'" +
-                        " and 'yes' are valid")
-                serial = toks[1]
             else:
                 raise ValueError("parsing board config failed, unknown token {}"
                     .format(toks[0]))
@@ -301,24 +273,6 @@ class HostMot2(Module, AutoCSR):
                 funcs[toks[0]] = int(toks[1])
             cntkey = toks[0] + '.' + toks[1]
             funccnt[cntkey] = funccnt.get(cntkey, 0) + 1
-
-        #
-        # add JP4 header
-        #
-        if serial == 'no':
-            platform.add_connector(("J4", {
-                3: "H5",
-                4: "G5",
-                5: "G6",
-                6: "F5",
-                7: "F12",
-                8: "F6",
-            }))
-        else:
-            platform.add_connector(("J4", {
-                7: "F12",
-                8: "F6",
-            }))
 
         #
         # build pin assignments
@@ -463,28 +417,24 @@ class HostMot2(Module, AutoCSR):
         hm2_demandmode = Signal()
         hm2_rates = Signal(5)
         hm2_wdlatchedbite = Signal()
-        hm2_leds = None
-        if not with_leds:
-            hm2_leds = platform.request_all("user_led")
+        hm2_leds = leds
 
-        hm2_iobits = []
+        hm2_ioins = []
+        hm2_ioouts = []
         for n, p in enumerate(pins):
             if p[2] == 'in':
-                hm2_iobits.append(hmio[n])
+                hm2_ioins.append(hmio[n])
+                hm2_ioouts.append(Signal())
             else:
+                io = None
                 if p[1]:
                     s = Signal()
                     self.comb += hmio[n].eq(~s)
-                    hm2_iobits.append(s)
+                    io = s
                 else:
-                    hm2_iobits.append(hmio[n])
-
-        # set to input
-        bufdir = platform.request("bufdir")
-        if driver_direction == 'input':
-            self.comb += bufdir.eq(1)
-        else:
-            self.comb += bufdir.eq(0)
+                    io = hmio[n]
+                hm2_ioins.append(io)
+                hm2_ioouts.append(io)
 
         # on 7i92: clklow, clkmed: 100MHz (procclock)
         #          clkhigh: 200MHz (clk1fx -> BUFG -> hs2fastclock)
@@ -500,16 +450,36 @@ class HostMot2(Module, AutoCSR):
             o_int           = hm2_int,              # not used
             o_dreq          = hm2_dreq,             # not used
             o_demandmode    = hm2_demandmode,       # not used
-            io_iobits       = Cat(*hm2_iobits),
+            i_ioins         = Cat(*hm2_ioins),
+            o_ioouts        = Cat(*hm2_ioouts),
             o_rates         = hm2_rates,
             o_leds          = hm2_leds,
             o_wdlatchedbite = hm2_wdlatchedbite,
             # io_liobits not used
         )
 
-        platform.add_source_dir(path="hostmot2/")
-        platform.add_source(builddir + "/consts_gen.vhd")
-        platform.add_source("hostmot2_top.vhd")
+        src_target = platform
+        if with_converter:
+            self.submodules.hm2_vhd2v_converter = VHD2VConverter(platform,
+                top_entity = "TopHostMot2",
+                build_dir = os.path.abspath(builddir + "/gateware/"),
+                work_package = "unisim",
+                force_convert = True,
+            )
+            conv = self.hm2_vhd2v_converter
+            conv._ghdl_opts.append("-fsynopsys")
+            conv._ghdl_opts.append("-frelaxed")
+            path = "hostmot2/";
+            for item in os.listdir(path):
+                if os.path.isfile(os.path.join(path, item)):
+                    print("add source %s" % item)
+                    conv.add_source(os.path.join(path, item))
+            conv.add_source("consts_gen.vhd")
+            conv.add_source("hostmot2_top.vhd")
+        else:
+            src_target.add_source_dir(path="hostmot2/")
+            src_target.add_source(builddir + "/consts_gen.vhd")
+            src_target.add_source("hostmot2_top.vhd")
 
         hm2bus = wishbone.Interface(soc.bus.data_width)
         soc.bus.add_slave("hostmot2", hm2bus,
