@@ -157,34 +157,17 @@ architecture Behavioral of stepgeni is
 	signal indexd: std_logic_vector(1 downto 0);
 	signal probed: std_logic_vector(1 downto 0);
 	signal countlatch : std_logic_vector(lsize-1 downto 0);
-	component SRL16E
---
-    generic (INIT : bit_vector);
 
-
---
-    port (D   : in  std_logic;
-          CE  : in  std_logic;
-          CLK : in  std_logic;
-          A0  : in  std_logic;
-          A1  : in  std_logic;
-          A2  : in  std_logic;
-          A3  : in  std_logic;
-          Q   : out std_logic); 
-	end component;
 	
 			
 begin
 
 	steptable: for i in 0 to tablewidth -1 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => ibus(i),
+	asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => ibus(i),
           CE  => loadtable,
           CLK => clk,
-          A0  => tableptr(0),
-          A1  => tableptr(1),
-          A2  => tableptr(2),
-          A3  => tableptr(3),
+          A  => tableptr,
           Q   => tabledata(i)
 			);	
   	end generate;

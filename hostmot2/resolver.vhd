@@ -2,8 +2,8 @@ library IEEE;
 use IEEE.std_logic_1164.all;  -- defines std_logic types
 use IEEE.std_logic_ARITH.ALL;
 use IEEE.std_logic_UNSIGNED.ALL;
-Library UNISIM;
-use UNISIM.vcomponents.all;
+--Library UNISIM;
+--use UNISIM.vcomponents.all;
 --
 -- Copyright (C) 2007, Peter C. Wallace, Mesa Electronics
 -- http://www.mesanet.com

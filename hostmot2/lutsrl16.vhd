@@ -1,7 +1,7 @@
 library IEEE;
-use IEEE.std_logic_1164.all;  -- defines std_logic types
-use IEEE.std_logic_ARITH.ALL;
-use IEEE.std_logic_UNSIGNED.ALL;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
 --
 -- Copyright (C) 2007, Peter C. Wallace, Mesa Electronics
 -- http://www.mesanet.com
@@ -67,28 +67,39 @@ use IEEE.std_logic_UNSIGNED.ALL;
 --     POSSIBILITY OF SUCH DAMAGE.
 -- 
 
-entity srl16delay is
-  generic (width : integer);
-  Port ( clk : in  STD_LOGIC;
-         dlyin : in  STD_LOGIC_VECTOR (width-1 downto 0);
-         dlyout : out  STD_LOGIC_VECTOR (width-1 downto 0);
-         delay : in  STD_LOGIC_VECTOR (3 downto 0));
-end srl16delay;
+entity lutsrl16 is		-- lut based srl16
+    generic ( 
+		init : std_logic_vector(15 downto 0) := X"0000"
+		);
+    port ( 
+          D   : in  std_logic;
+          CE  : in  std_logic;
+          CLK : in  std_logic;
+          A   : in  std_logic_vector(3 downto 0);
+          Q   : out std_logic 
+		);
+end lutsrl16;
 
-architecture Behavioral of srl16delay is
+architecture Behavioral of lutsrl16 is
+signal sreg : std_logic_vector(15 downto 0) := init;
 
-			
+
 begin
 
-	fifosrl0: for i in 0 to width-1 generate
-          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
-          D   => dlyin(i),
-          CE  => '1',
-          CLK => clk,
-          A   => delay,
-          Q   => dlyout(i)
-			);	
-  	end generate;
+	a_lutsrl16_reg: process (CLK,D,A,CE)
 
+	begin
+		if clk'event and clk = '1' then
+			if CE = '1' then
+				 sreg(15 downto 1) <= sreg(14 downto 0);
+				 sreg(0) <= D;
+			end if;
+		end if; -- clk
+		Q <= sreg(0);
+		for i in 0 to 15 loop
+			if i = A then
+				Q <= sreg(i);
+			end if;
+		end loop;	
+	end process;
 end Behavioral;
-

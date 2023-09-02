@@ -117,10 +117,12 @@ package IDROMConst is
 	constant BoardName7I90 : std_logic_vector(31 downto 0) := x"30394937";		-- 7I90
 	constant BoardName7I91 : std_logic_vector(31 downto 0) := x"31394937";		-- 7I91
 	constant BoardName7I92 : std_logic_vector(31 downto 0) := x"32394937";		-- 7I92
+	constant BoardName7I92T : std_logic_vector(31 downto 0) := x"32394937";		-- 7I92
 	constant BoardName7I93 : std_logic_vector(31 downto 0) := x"33394937";		-- 7I93
 	constant BoardName7I94 : std_logic_vector(31 downto 0) := x"34394937";		-- 7I93
 	constant BoardName7I95 : std_logic_vector(31 downto 0) := x"35394937";		-- 7I95
 	constant BoardName7I96 : std_logic_vector(31 downto 0) := x"36394937";		-- 7I96
+	constant BoardName7I96S : std_logic_vector(31 downto 0) := x"36394937";		-- 7I96
 	constant BoardName7I97 : std_logic_vector(31 downto 0) := x"37394937";		-- 7I97
 	constant BoardName7I98 : std_logic_vector(31 downto 0) := x"38394937";		-- 7I98
 	constant BoardName7IA0 : std_logic_vector(31 downto 0) := x"30414937";		-- 7IA0
@@ -440,6 +442,15 @@ package IDROMConst is
 	constant OutMDataAddr : std_logic_vector(7 downto 0) := x"B0";
 	constant OutMNumRegs : std_logic_vector(7 downto 0) := x"01";
 	constant OutMMPBitMask : std_logic_vector(31 downto 0) := x"00000001";
+
+	constant OneShotPW1Addr : std_logic_vector(7 downto 0) := x"B1";	
+	constant OneShotPW2Addr : std_logic_vector(7 downto 0) := x"B2";	
+	constant OneShotFilter1Addr : std_logic_vector(7 downto 0) := x"B3";	
+	constant OneShotFilter2Addr : std_logic_vector(7 downto 0) := x"B4";	
+	constant OneShotRateAddr : std_logic_vector(7 downto 0) := x"B5";	
+	constant OneShotControlAddr : std_logic_vector(7 downto 0) := x"B6";	
+	constant OneShotNumRegs : std_logic_vector(7 downto 0) := x"06";
+	constant OneShotMPBitMask : std_logic_vector(31 downto 0) := x"0000003F";
 	
 	
 	constant ClockLow20: integer :=  33333333;  		-- 5I20/4I65 low speed clock
@@ -460,10 +471,12 @@ package IDROMConst is
 	constant ClockLow90: integer :=  100000000;		-- 7I90 low speed clock
 	constant ClockLow91: integer :=  100000000;		-- 7I91 low speed clock
 	constant ClockLow92: integer :=  100000000;		-- 7I92 low speed clock
+	constant ClockLow92T: integer :=  100000000;		-- 7I92T low speed clock
 	constant ClockLow93: integer :=  100000000;		-- 7I93 low speed clock
 	constant ClockLow94: integer :=  100000000;		-- 7I94 low speed clock
 	constant ClockLow95: integer :=  100000000;		-- 7I95 low speed clock
 	constant ClockLow96: integer :=  100000000;		-- 7I96 low speed clock
+	constant ClockLow96S: integer :=  100000000;		-- 7I96S low speed clock
 	constant ClockLow97: integer :=  100000000;		-- 7I97 low speed clock
 	constant ClockLow98: integer :=  100000000;		-- 7I98 low speed clock
 	constant ClockLowA0: integer :=  100000000;		-- 7IA0 low speed clock
@@ -488,10 +501,12 @@ package IDROMConst is
 	constant ClockMed90: integer    := 100000000;	-- 7I90 medium speed clock
 	constant ClockMed91: integer    := 100000000;	-- 7I91 medium speed clock
 	constant ClockMed92: integer    := 100000000;	-- 7I92 medium speed clock
+	constant ClockMed92T: integer    := 100000000;	-- 7I92T medium speed clock
 	constant ClockMed93: integer    := 100000000;	-- 7I93 medium speed clock
 	constant ClockMed94: integer    := 100000000;	-- 7I94 medium speed clock
 	constant ClockMed95: integer    := 100000000;	-- 7I95 medium speed clock
 	constant ClockMed96: integer    := 100000000;	-- 7I96 medium speed clock
+	constant ClockMed96S: integer    := 100000000;	-- 7I96S medium speed clock
 	constant ClockMed97: integer    := 100000000;	-- 7I97 medium speed clock
 	constant ClockMed98: integer    := 100000000;	-- 7I98 medium speed clock
 	constant ClockMedA0: integer    := 100000000;	-- 7IA0 medium speed clock
@@ -517,10 +532,12 @@ package IDROMConst is
 	constant ClockHigh90: integer    := 200000000;	-- 7I90 high speed clock
 	constant ClockHigh91: integer    := 200000000;	-- 7I91 high speed clock
 	constant ClockHigh92: integer    := 200000000;	-- 7I92 high speed clock
+	constant ClockHigh92T: integer    := 180000000;	-- 7I92T high speed clock
 	constant ClockHigh93: integer    := 200000000;	-- 7I93 high speed clock
 	constant ClockHigh94: integer    := 200000000;	-- 7I94 high speed clock
 	constant ClockHigh95: integer    := 200000000;	-- 7I95 high speed clock
 	constant ClockHigh96: integer    := 200000000;	-- 7I96 high speed clock
+	constant ClockHigh96S: integer    := 200000000;	-- 7I96S high speed clock
 	constant ClockHigh97: integer    := 200000000;	-- 7I97 high speed clock
 	constant ClockHigh98: integer    := 200000000;	-- 7I98 high speed clock
 	constant ClockHighA0: integer    := 200000000;	-- 7IA0 high speed clock
@@ -1191,6 +1208,12 @@ package IDROMConst is
 		constant SSerialbNTXEnDPin : std_logic_vector(7 downto 0) := x"AE";	
 		constant SSerialbNTXEnEPin : std_logic_vector(7 downto 0) := x"AF";	
 		constant SSerialbTestPin : std_logic_vector(7 downto 0) := x"B1";	
+		
+	constant OneShotTag : std_logic_vector(7 downto 0) := x"C7";
+		constant OneShotTrig1Pin : std_logic_vector(7 downto 0) := x"01";
+		constant OneShotTrig2Pin : std_logic_vector(7 downto 0) := x"02";
+		constant OneShotOut1Pin : std_logic_vector(7 downto 0) := x"83";
+		constant OneShotOut2Pin : std_logic_vector(7 downto 0) := x"84";
 		
 	
 	constant LEDTag : std_logic_vector(7 downto 0) := x"80";

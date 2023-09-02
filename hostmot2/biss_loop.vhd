@@ -155,36 +155,16 @@ signal TestDataSR: std_logic_vector(31 downto 0);
 	signal Pop: std_logic;  
 	signal ClearLIFO: std_logic;
 	signal llifoempty: std_logic; 
-	signal llifohasdata: std_logic; 
-
-  component SRL16E
---
-    generic (INIT : bit_vector);
-
-
---
-    port (D   : in  std_logic;
-          CE  : in  std_logic;
-          CLK : in  std_logic;
-          A0  : in  std_logic;
-          A1  : in  std_logic;
-          A2  : in  std_logic;
-          A3  : in  std_logic;
-          Q   : out std_logic); 
-  end component;
-	
+	signal llifohasdata: std_logic; 	
 			
 begin
 
 	lifosrl: for i in 0 to 31 generate
-		asr16e: SRL16E generic map (x"0000") port map(
- 			 D	  => BissDataPipe(2),
+          asr16e: entity work.lutsrl16 generic map (x"0000") port map(
+          D   => BissDataPipe(2),
           CE  => PushBit(i),
           CLK => hclk,
-          A0  => PopAdd(0),
-          A1  => PopAdd(1),
-          A2  => PopAdd(2),
-          A3  => PopAdd(3),
+          A  => PopAdd,
           Q   => PopData(i)
 			);	
   	end generate;

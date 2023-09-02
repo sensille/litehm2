@@ -84,6 +84,7 @@ entity wordpr is
 			loadinvert: in STD_LOGIC;
 			readddr: in STD_LOGIC;
 			portdata: out STD_LOGIC_VECTOR (size-1 downto 0);
+            dirdata: out STD_LOGIC_VECTOR (size-1 downto 0);
 			altdata: in STD_LOGIC_VECTOR (size-1 downto 0)
  			);
 end wordpr;
@@ -152,21 +153,18 @@ begin
 				end if;							
 			end if;
 			if opendrainsel(i) = '0' then				-- normal DDR	
-				if (ddrreg(i) = '1')  then 
-					tsoutreg(i) <= tdata(i);
-				else
-					tsoutreg(i) <= 'Z';
-				end if;
+				tsoutreg(i) <= ddrreg(i); 
 			else	
-				if tdata(i) = '0' then 				-- open drain option = active pulldown
-					tsoutreg(i) <= '0';
+				if tdata(i) = '0' then 				    -- open drain option = active pulldown
+					tsoutreg(i) <= ddrreg(i);
 				else
-					tsoutreg(i) <= 'Z';
+					tsoutreg(i) <= '0';                 -- if high, disable driver
 				end if;
 			end if;
 		end loop;
 		
-		portdata <= tsoutreg;
+		portdata <= tdata;
+        dirdata <= tsoutreg;
 		obus <= (others => 'Z');
 		if readddr = '1' then
 			obus(size-1 downto 0) <= ddrreg;
