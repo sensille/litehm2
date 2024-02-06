@@ -560,23 +560,6 @@ begin
 			clrhdoorbellreq1 <= '0';
 		end if;
 				
-		-- then the reads
-		-- first the host reads
-		obus <= (others => 'Z');
-		if hreaddata = '1' then
-			if romwrena = '0' then							-- normally just read the data register
-				obus(7 downto 0)  <= ldatareg;
-				obus(31 downto 8) <= (others => '0');	
-			else
-				obus(15 downto 0) <= romdata;				-- but if romwrena set, read the ROM data
-				obus(31 downto 16) <=(others => '0');
-			end if;
-		end if;	
-		if hreadcommand = '1' then
-			obus(15 downto 0) <= hcommandreg;			-- host readback command reg
-			obus(31 downto 16) <=(others => '0');
-		end if;
-		
 		iodata <= (others => 'Z');
 		if lreadcommandl= '1' then
 			iodata <= hcommandreg(7 downto 0);
@@ -666,6 +649,20 @@ begin
 		if hreadregs3 = '1' then
 			obus <= hibus32_3;
 		end if;	
+		if hreaddata = '1' then
+			if romwrena = '0' then							-- normally just read the data register
+				obus(7 downto 0)  <= ldatareg;
+				obus(31 downto 8) <= (others => '0');	
+			else
+				obus(15 downto 0) <= romdata;				-- but if romwrena set, read the ROM data
+				obus(31 downto 16) <=(others => '0');
+			end if;
+		end if;	
+		if hreadcommand = '1' then
+			obus(15 downto 0) <= hcommandreg;			-- host readback command reg
+			obus(31 downto 16) <=(others => '0');
+		end if;
+		
 	end process WidthShim;
 	
 	atimer: process(clkmed,lreadtimerl,lreadtimerh,lwritetimerl, 
