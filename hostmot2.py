@@ -474,7 +474,7 @@ class HostMot2(Module, AutoCSR):
                 if os.path.isfile(os.path.join(path, item)):
                     print("add source %s" % item)
                     conv.add_source(os.path.join(path, item))
-            conv.add_source("consts_gen.vhd")
+            conv.add_source(builddir + "/consts_gen.vhd")
             conv.add_source("hostmot2_top.vhd")
         else:
             src_target.add_source_dir(path="hostmot2/")
