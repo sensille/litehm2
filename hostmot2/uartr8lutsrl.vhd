@@ -175,7 +175,6 @@ begin
 		else
 			lfifoempty <= '0';
 		end if;
-		fifohasdata <= not lfifoempty;		 
 	end process afifo;
 
 	asimpleuartrx: process (clk,OldDDSMSB, BitrateDDSAccum, SReg, DAV, 
