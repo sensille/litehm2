@@ -86,11 +86,11 @@ pin_subfuncs = {
     },
     'inmux': {
         'data': ['InMuxDataPin', 'in'],
-        'addr0': ['InMuxAddr0Pin', 'in'],
-        'addr1': ['InMuxAddr1Pin', 'in'],
-        'addr2': ['InMuxAddr2Pin', 'in'],
-        'addr3': ['InMuxAddr3Pin', 'in'],
-        'addr4': ['InMuxAddr4Pin', 'in'],
+        'addr0': ['InMuxAddr0Pin', 'out'],
+        'addr1': ['InMuxAddr1Pin', 'out'],
+        'addr2': ['InMuxAddr2Pin', 'out'],
+        'addr3': ['InMuxAddr3Pin', 'out'],
+        'addr4': ['InMuxAddr4Pin', 'out'],
     },
     'sserial': {
         'tx0en': ['SSerialTxEn0Pin', 'in'],
