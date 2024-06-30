@@ -7,6 +7,28 @@
 #define MAC_ADDR (SPIFLASH_SIZE - 0x100)
 #define IP_ADDR (MAC_ADDR + 16)
 
+static int
+spiflash_rx_ready_read(void)
+{
+	return (spiflash_core_master_status_read() >> CSR_SPIFLASH_CORE_MASTER_STATUS_RX_READY_OFFSET) & 1;
+}
+
+static void
+spiflash_len_mask_width_write(uint32_t len, uint32_t width, uint32_t mask)
+{
+	uint32_t tmp;
+	uint32_t word;
+
+	tmp = len & ((2 ^ CSR_SPIFLASH_CORE_MASTER_PHYCONFIG_LEN_SIZE) - 1);
+	word = tmp << CSR_SPIFLASH_CORE_MASTER_PHYCONFIG_LEN_OFFSET;
+	tmp = width & ((2 ^ CSR_SPIFLASH_CORE_MASTER_PHYCONFIG_WIDTH_SIZE) - 1);
+	word |= tmp << CSR_SPIFLASH_CORE_MASTER_PHYCONFIG_WIDTH_OFFSET;
+	tmp = mask & ((2 ^ CSR_SPIFLASH_CORE_MASTER_PHYCONFIG_MASK_SIZE) - 1);
+	word |= tmp << CSR_SPIFLASH_CORE_MASTER_PHYCONFIG_MASK_OFFSET;
+
+	spiflash_core_master_phyconfig_write(word);
+}
+
 /* for now transfer x1 */
 static void
 flash_transfer(const uint8_t *wr1, int wr1_len, const uint8_t *wr2, int wr2_len,
@@ -15,7 +37,7 @@ flash_transfer(const uint8_t *wr1, int wr1_len, const uint8_t *wr2, int wr2_len,
 	uint32_t w;
 
 	/* something is wrong then there are still rx bytes ready */
-	while (spiflash_core_master_status_rx_ready_read()) {
+	while (spiflash_rx_ready_read()) {
 		w = spiflash_core_master_rxtx_read();
 	}
 	spiflash_core_master_cs_write(1);
@@ -30,7 +52,7 @@ flash_transfer(const uint8_t *wr1, int wr1_len, const uint8_t *wr2, int wr2_len,
 			spiflash_core_master_rxtx_write(0x00);
 		}
 
-		while (!spiflash_core_master_status_rx_ready_read())
+		while (!spiflash_rx_ready_read())
 			;
 
 		w = spiflash_core_master_rxtx_read();
@@ -140,7 +162,5 @@ flash_init(void)
 	spiflash_dummy_bits_setup(SPIFLASH_MODULE_DUMMY_BITS);
 #endif
 	spiflash_phy_clk_divisor_write(4);	/* XXX not needed */
-	spiflash_core_master_phyconfig_len_write(8);
-	spiflash_core_master_phyconfig_mask_write(1);
-	spiflash_core_master_phyconfig_width_write(1);
+	spiflash_len_mask_width_write(8, 1, 1);
 }
