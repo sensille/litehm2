@@ -311,7 +311,7 @@ class LiteHM2(SoCCore):
                 nrxslots    = 8,
                 txslots_write_only = True,
                 with_timestamp = True,
-                tx_cdc_buffered = tx_cdc_buffered,
+                #tx_cdc_buffered = tx_cdc_buffered,
             )
 
         if with_etherbone:
