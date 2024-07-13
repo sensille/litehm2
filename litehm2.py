@@ -136,7 +136,7 @@ class LiteHM2(SoCCore):
             self.add_ethernet(
                 phy         = self.ethphy,
                 data_width  = 32,
-                ntxslots    = 2,
+                ntxslots    = 1,
                 nrxslots    = 8,
                 txslots_write_only = True,
                 with_timestamp = True,
