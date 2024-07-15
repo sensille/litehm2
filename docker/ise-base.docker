@@ -1,0 +1,29 @@
+FROM debian:bookworm
+
+RUN usermod --shell /bin/bash root
+
+COPY Xilinx_ISE_DS_Lin_14.7_1015_1.tar /root/
+WORKDIR /root
+RUN tar xvf Xilinx_ISE_DS_Lin_14.7_1015_1.tar
+RUN rm Xilinx_ISE_DS_Lin_14.7_1015_1.tar
+
+RUN \
+  apt-get update && \
+  apt-get install -y \
+    libncurses5 \
+    libfontconfig1 \
+    libfreetype6 \
+    libglib2.0-0 \
+    libsm6 \
+    libxi6 \
+    libxrender1 \
+    libxrandr2 \
+    openssh-server \
+    sudo \
+    vim
+
+RUN touch .Xauthority
+RUN echo "root:root" | chpasswd
+RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+
+CMD ["/bin/bash", "-c", "/etc/init.d/ssh start; sleep infinity"]
