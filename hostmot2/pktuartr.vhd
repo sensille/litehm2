@@ -116,7 +116,7 @@ signal RCPopData: std_logic_vector(log2(maxFrameSize)-1 downto 0);
 signal ErrPopData: std_logic_vector(2 downto 0);
 -- uart interface related signals
 
-constant DDSWidth : integer := 20;
+constant DDSWidth : integer := 24;
 constant defaultfilter : real := round((real(Clock)/5000000.0)); --default filter TC is 200 ns
 
 signal BitrateDDSReg : std_logic_vector(DDSWidth-1 downto 0);
@@ -131,7 +131,7 @@ signal RDataLatch :  std_logic_vector(31 downto 0);
 signal SReg: std_logic_vector(10 downto 0);
 alias  SRegData: std_logic_vector(7 downto 0)is SReg(9 downto 2);
 alias  StartBit: std_logic is Sreg(0);
-alias Parity_or_StopBit: std_logic  is Sreg(9);
+alias  Parity_or_StopBit: std_logic  is Sreg(9);
 alias  PStopBit: std_logic is Sreg(10);
 signal RXPipe : std_logic_vector(1 downto 0);
 signal RecvCount: std_logic_vector(log2(MaxFrameSize)-1 downto 0);
@@ -139,10 +139,11 @@ signal Go: std_logic;
 signal FDGo: std_logic; 
 signal Clear: std_logic; 
 signal ModeReg: std_logic_vector(18 downto 0);
-alias FrameDelay: std_logic_vector(7 downto 0) is ModeReg(15 downto 8);
+signal BadDataPop: std_logic;
+alias  FrameDelay: std_logic_vector(7 downto 0) is ModeReg(15 downto 8);
 signal FrameDelayCount: std_logic_vector(7 downto 0);
 signal FrameTimeout: std_logic; 
-alias FalseStart: std_logic is ModeReg(0);-- started recieve but middle of start bit is '1' 
+alias  FalseStart: std_logic is ModeReg(0);-- started recieve but middle of start bit is '1' 
 alias OverRun: std_logic is ModeReg(1);	-- '0' where stop bit should be
 alias RXMaskEn: std_logic is ModeReg(2); 	-- enable TXEN of transmit side to disable receive
 alias RXEnable: std_logic is ModeReg(3); 	-- RX enable
@@ -152,8 +153,8 @@ alias OddParity: std_logic is ModeReg(18); 	-- odd parity  write only
 signal RXErrs: std_logic_vector(2 downto 0);
 signal ClrRXErrs: std_logic; 
 signal ClrRXErrsD: std_logic; 
-signal FilterReg: std_logic_vector(7 downto 0) := std_logic_vector(to_unsigned(integer(defaultfilter),8)); 
-signal FilterCount: std_logic_vector(7 downto 0);
+signal FilterReg: std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(integer(defaultfilter),16)); 
+signal FilterCount: std_logic_vector(15 downto 0);
 signal RXDataD: std_logic;
 signal RXDataFilt: std_logic;
 
@@ -197,12 +198,16 @@ begin
 			if PushData = '1' then
 				InAdd <= InAdd+1;
 			end if;		 								   
-			if popdata = '1' then
+			if (popdata = '1') and (FrameBufferEmpty = '0') then
 				OutAdd <= OutAdd +1;
+			end if; 		
+			if (popdata = '1') and (FrameBufferEmpty = '1') then
+				BadDataPop <= '1';
 			end if; 		
 			if Clear = '1' then
 				InAdd <= (others => '0');
 				OutAdd <= (others => '0');
+				BadDataPop <= '0';
 			end if;	
 		end if; -- clk
 		if InAdd = OutAdd then 
@@ -402,16 +407,17 @@ begin
 				FrameDelayCount <= x"01";
 				BytePointer <= "00";
 			end if;	
-			
+							
 			OldDDSMSB <= DDSMSB;							-- for Phase accumulator MSB edge detection
 
 			if loadbitrate =  '1' then 
-				BitRateDDSReg <= ibus(DDSWidth-1 downto 0);				 
+				BitRateDDSReg <= ibus(DDSWidth-1 downto 0);	
+				FilterReg(15 downto 8) <= ibus(31 downto 24);
 			end if;
 			
-			if loadmode=  '1' and ibus(31) = '0' then 
+			if (loadmode =  '1') and ibus(31) = '0' then 
 				ModeReg <= ibus(18 downto 0);
-				FilterReg <= ibus(29 downto 22);
+				FilterReg(7 downto 0) <= ibus(29 downto 22);
 			end if;
 
 		end if; -- clk
@@ -446,6 +452,7 @@ begin
 		
       if readbitrate =  '1' then
 			obus(DDSWidth-1 downto 0) <= BitRateDDSReg;
+			obus(31 downto 24) <= FilterReg(15 downto 8);
 		end if;
 		
 		if readmode =  '1' then
@@ -457,8 +464,9 @@ begin
 			obus(15 downto 8) <= ModeReg(15 downto 8); -- frame delay
 			obus(20 downto 16) <= RFrameCount;
 			obus(21) <= not FrameBufferEmpty;
-			obus(29 downto 22) <= FilterReg;
-			obus(31 downto 30) <= (others => '0');
+			obus(29 downto 22) <= FilterReg(7 downto 0);
+			obus(30) <= BadDataPop;
+			obus(31) <= '0';
 		end if;
 			
 	end process asimpleuartrx;

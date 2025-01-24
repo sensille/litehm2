@@ -66,7 +66,7 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 --     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 --     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 --     POSSIBILITY OF SUCH DAMAGE.
--- 
+--     SSLBPBROM versions 46 or earlier only!
 
 use work.log2.all;
 use work.decodedstrobe.all;	

@@ -106,7 +106,7 @@ signal SCFIFOEmpty : std_logic;
 signal SCPopData: std_logic_vector(log2(maxFrameSize)-1 downto 0);
 -- uart interface related signals
 
-constant DDSWidth : integer := 20;
+constant DDSWidth : integer := 24;
 
 signal BitrateDDSReg : std_logic_vector(DDSWidth-1 downto 0);
 signal BitrateDDSAccum : std_logic_vector(DDSWidth-1 downto 0);
@@ -373,7 +373,8 @@ begin
 		DriveEnHold <= (not DriveEnable) or WaitingForDrive;
 		
 		if DriveEnAuto = '1' then 
-			DriveEnable <= (Go or FDGo or SCNZ or (not SCFIFOEmpty)); 																						-- when there is data to xmit
+			DriveEnable <= (Go or SCNZ or (not SCFIFOEmpty)); 			-- 09/08/23 Drive enable should																				-- when there is data to xmit
+--			DriveEnable <= (Go or FDGo or SCNZ or (not SCFIFOEmpty));-- not be extended by interframe delay 																						-- when there is data to xmit
 		else																		
 			DriveEnable <= DriveEnBit;
 		end if;	

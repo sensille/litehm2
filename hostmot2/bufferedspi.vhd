@@ -415,8 +415,10 @@ begin
 					spicsout(i) <= '1';
 				end if;	
 			end loop;  
+			report("Decoded BSPI found");
 		else
 			spicsout <= CSReg;					-- decoded select with separate frame = BSPI
+			report("Normal BSPI found");
 		end if;
 		spiout <= SPISReg(conv_integer(BitCountReg(4 downto 0)));
 	end process aspiinterface;

@@ -83,8 +83,10 @@ use work.MaxOutputPinsPerModule.all;
 use work.MaxIOPinsPerModule.all;	
 use work.CountPinsInRange.all;
 use work.PinExists.all;	
+use work.PinAndChanExists.all;	
 use work.ModuleExists.all;	
 use work.GetModuleHint.all;
+use work.ModuleVersion.all;
 	
 entity HostMot2 is
   	generic
@@ -156,11 +158,11 @@ constant MuxedQCountersMIM: integer := NumberOfModules(TheModuleID,MuxedQCountMI
 signal DeMuxedIndex: std_logic_vector(MuxedQCounters -1 downto 0);							-- needs to be global because its shared
 constant PWMGens : integer := NumberOfModules(TheModuleID,PWMTag);
 constant UsePWMEnas: boolean := PinExists(ThePinDesc,PWMTag,PWMCEnaPin);
+constant PWMVersion : integer := ModuleVersion(TheModuleID,PWMTag);
 constant TPPWMGens : integer := NumberOfModules(TheModuleID,TPPWMTag);
 constant RCPWMGens : integer := NumberOfModules(TheModuleID,RCPWMTag);
 constant SPIs: integer := NumberOfModules(TheModuleID,SPITag);
 constant BSPIs: integer := NumberOfModules(TheModuleID,BSPITag);
-constant DBSPIs: integer := NumberOfModules(TheModuleID,DBSPITag);
 constant SSSIs: integer := NumberOfModules(TheModuleID,SSSITag);   
 constant FAbss: integer := NumberOfModules(TheModuleID,FAbsTag); 
 constant BISSs: integer := NumberOfModules(TheModuleID,BISSTag);   
@@ -227,13 +229,13 @@ constant InMWidth: InMWidthType :=(
 constant DPainters: integer := NumberOfModules(TheModuleID,DPainterTag); 
 
 constant XY2Mods: integer := NumberOfModules(TheModuleID,XY2ModTag); 
+constant OneShots: integer := NumberOfModules(TheModuleID,OneShotTag);
+constant Periodms: integer := NumberOfModules(TheModuleID,PeriodMTag);
 
 -- extract the needed Stepgen table width from the max pin# used with a stepgen tag
 constant StepGenTableWidth: integer := MaxPinsPerModule(ThePinDesc,StepGenTag);
 	-- extract how many BSPI CS pins are needed
 constant BSPICSWidth: integer := CountPinsInRange(ThePinDesc,BSPITag,BSPICS0Pin,BSPICS7Pin);
-	-- extract how many DBSPI CS pins are needed
-constant DBSPICSWidth: integer := CountPinsInRange(ThePinDesc,DBSPITag,DBSPICS0Pin,DBSPICS7Pin);
 -- extract the needed Stepgen table width from the max pin# used with a stepgen tag
 constant InMuxAddrWidth: integer := MaxPinsPerModule(ThePinDesc,InMuxTag);
 --type InMuxWidthHintType is array(0 to InMuxes-1) of integer;
@@ -1712,22 +1714,50 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 		end generate makepwmena;
 	
 	makepwmgens : for i in 0 to PWMGens-1 generate
-		pwmgenx: entity work.pwmpdmgenh
-		generic map ( 
-			buswidth => BusWidth,
-			refwidth => PWMRefWidth			-- Normally 13 for 12,11,10, and 9 bit PWM resolutions = 25KHz,50KHz,100KHz,200KHz max. Freq
-			)
-		port map (
-			clk => clklow,
-			hclk => clkhigh,
-			refcount	=> RefCountBus,
-			ibus => ibus,
-			loadpwmval => LoadPWMVal(i),
-			pcrloadcmd => LoadPWMCR(i),
-			pdmrate => PDMRate,
-			pwmouta => PWMGenOutA(i),
-			pwmoutb => PWMGenOutB(i)
-			);		
+		makestandardpwms: if PWMVersion = 0 generate
+			standardpwmreport: process
+			begin
+				report("Generating standard PWM, Chan: "& integer'image(i));
+			end process;
+			pwmgenx: entity work.pwmpdmgenh
+			generic map ( 
+				buswidth => BusWidth,
+				refwidth => PWMRefWidth			-- Normally 13 for 12,11,10, and 9 bit PWM resolutions 
+				)
+			port map (
+				clk => clklow,
+				hclk => clkhigh,
+				refcount	=> RefCountBus,
+				ibus => ibus,
+				loadpwmval => LoadPWMVal(i),
+				pcrloadcmd => LoadPWMCR(i),
+				pdmrate => PDMRate,
+				pwmouta => PWMGenOutA(i),
+				pwmoutb => PWMGenOutB(i)
+				);	
+			end generate;
+		makeditheredpwms: if PWMVersion > 0 generate			-- versions > 0 have dither capability
+			ditheredpwmreport: process
+			begin
+				report("Generating dithered PWM, Chan: "& integer'image(i));
+			end process;
+			pwmgenx: entity work.dpwmpdmgenh
+			generic map ( 
+				buswidth => BusWidth,
+				refwidth => PWMRefWidth			-- Normally 13 for 12,11,10, and 9 bit PWM resolutions 
+				)
+			port map (
+				clk => clklow,
+				hclk => clkhigh,
+				refcount	=> RefCountBus,
+				ibus => ibus,
+				loadpwmval => LoadPWMVal(i),
+				pcrloadcmd => LoadPWMCR(i),
+				pdmrate => PDMRate,
+				pwmouta => PWMGenOutA(i),
+				pwmoutb => PWMGenOutB(i)
+				);		
+			end generate;	
 		end generate;
 		
 		PWMDecodeProcess : process (A,Readstb,writestb,PWMValSel, PWMCRSel)
@@ -2114,7 +2144,7 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			bspi: entity work.BufferedSPI
 			generic map (
 				cswidth => BSPICSWidth,
-				gatedcs => false)		
+				gatedcs => not PinAndChanExists(ThePinDesc,BSPITag,BSPIFramePin,i))		
 			port map (
 				clk  => clklow,
 				ibus => ibus,
@@ -2179,115 +2209,29 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 				end if;
 			end loop;
 		end process;		
-	end generate;
-
-	makedbspimod:  if DBSPIs >0  generate	
-	signal LoadDBSPIData: std_logic_vector(DBSPIs -1 downto 0);
-	signal ReadDBSPIData: std_logic_vector(DBSPIs -1 downto 0);     
-	signal LoadDBSPIDescriptor: std_logic_vector(DBSPIs -1 downto 0);
-	signal ReadDBSPIFIFOCOunt: std_logic_vector(DBSPIs -1 downto 0);
-	signal ClearDBSPIFIFO: std_logic_vector(DBSPIs -1 downto 0);
-	signal DBSPIClk: std_logic_vector(DBSPIs -1 downto 0);
-	signal DBSPIIn: std_logic_vector(DBSPIs -1 downto 0);
-	signal DBSPIOut: std_logic_vector(DBSPIs -1 downto 0);
-	type DBSPICSType is array(DBSPIs-1 downto 0) of std_logic_vector(DBSPICSWidth-1 downto 0);
-	signal DBSPICS : DBSPICSType;
-	signal DBSPIDataSel : std_logic;	
-	signal DBSPIFIFOCountSel : std_logic;
-	signal DBSPIDescriptorSel : std_logic;
-	begin
-		makedbspis: for i in 0 to DBSPIs -1 generate
-			bspi: entity work.BufferedSPI
-			generic map (
-				cswidth => DBSPICSWidth,
-				gatedcs => true
-				)		
-			port map (
-				clk  => clklow,
-				ibus => ibus,
-				obus => obus,
-				addr => A(5 downto 2),
-				hostpush => LoadDBSPIData(i),
-				hostpop => ReadDBSPIData(i),
-				loaddesc => LoadDBSPIDescriptor(i),
-				loadasend => '0',
-				clear => ClearDBSPIFIFO(i),
-				readcount => ReadDBSPIFIFOCount(i),
-				spiclk => DBSPIClk(i),
-				spiin => DBSPIIn(i),
-				spiout => DBSPIOut(i),
-				spicsout => DBSPICS(i)
-				);
-		end generate;	
-	
-		DBSPIDecodeProcess : process (A,Readstb,writestb,DBSPIDataSel,DBSPIFIFOCountSel,DBSPIDescriptorSel)
-		begin		
-			if A(15 downto 8) = DBSPIDataAddr then	 --  DBSPI data register select
-				DBSPIDataSel <= '1';
-			else
-				DBSPIDataSel <= '0';
-			end if;
-			if A(15 downto 8) = DBSPIFIFOCountAddr then	 --  DBSPI FIFO count register select
-				DBSPIFIFOCountSel <= '1';
-			else
-				DBSPIFIFOCountSel <= '0';
-			end if;
-			if A(15 downto 8) = DBSPIDescriptorAddr then	 --  DBSPI channel descriptor register select
-				DBSPIDescriptorSel <= '1';
-			else
-				DBSPIDescriptorSel <= '0';
-			end if;
-			LoadDBSPIData <= OneOfNDecode(DBSPIs,DBSPIDataSel,writestb,A(7 downto 6)); -- 4 max
-			ReadDBSPIData <= OneOfNDecode(DBSPIs,DBSPIDataSel,Readstb,A(7 downto 6));
-			LoadDBSPIDescriptor<= OneOfNDecode(DBSPIs,DBSPIDescriptorSel,writestb,A(5 downto 2));
-			ReadDBSPIFIFOCOunt <= OneOfNDecode(DBSPIs,DBSPIFIFOCountSel,Readstb,A(5 downto 2));
-			ClearDBSPIFIFO <= OneOfNDecode(DBSPIs,DBSPIFIFOCountSel,writestb,A(5 downto 2));
-		end process DBSPIDecodeProcess;
-
-		DoDBSPIPins: process(DBSPIOut, DBSPIClk, DBSPICS, IOBits)
+		DoLocalBSPIPins: process(BSPIFrame, BSPIOut, BSPIClk, BSPICS, IOBits)
 		begin	
-			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
-				if ThePinDesc(i)(15 downto 8) = DBSPITag then											
-					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function, drop MSB		
-						when DBSPIOutPin =>
-							AltData(i) <= DBSPIOut(conv_integer(ThePinDesc(i)(23 downto 16)));				
-						when DBSPIClkPin =>
-							AltData(i) <= DBSPIClk(conv_integer(ThePinDesc(i)(23 downto 16)));											when DBSPIInPin =>		
-							DBSPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= IOBits(i);
+			for i in 0 to LIOWidth -1 loop				-- loop through all the external I/O pins 
+				if ThePinDesc(i)(15 downto 8) = BSPITag then											
+					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function, drop MSB
+						when BSPIFramePin =>
+							LIOBits(i) <= BSPIFrame(conv_integer(ThePinDesc(i)(23 downto 16)));				
+						when BSPIOutPin =>
+							LIOBits(i) <= BSPIOut(conv_integer(ThePinDesc(i)(23 downto 16)));				
+						when BSPIClkPin =>
+							LIOBits(i) <= BSPIClk(conv_integer(ThePinDesc(i)(23 downto 16)));				
+						when BSPIInPin =>		
+							BSPIIn(conv_integer(ThePinDesc(i)(23 downto 16))) <= LIOBits(i);
 						when others => 
-							AltData(i) <= DBSPICS(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(6 downto 0))-5);
-				   		-- magic foo, magic foo, what on earth does it do?						
-							-- (this needs to written more clearly!)							
+						   LIOBits(i) <= BSPICS(conv_integer(ThePinDesc(i)(23 downto 16)))(conv_integer(ThePinDesc(i)(6 downto 0))-5);
+						   -- magic foo, magic foo, what on earth does it do?						
+						   -- (this needs to written more clearly!)							
 					end case;
 				end if;
-			end loop;	
-		end process;	
-						
-		DoLocalDDBSPIPins: process(LIOBits,DBSPICS,DBSPIClk,DBSPIOut) -- only for 4I69 LIO currently
-		begin
-			for i in 0 to LIOWidth -1 loop				-- loop through all the local I/O pins 
-				report("Doing DBSPI LIOLoop: "& integer'image(i));
-				if ThePinDesc(i+IOWidth)(15 downto 8) = DBSPITag then 	-- GTag (Local I/O starts at end of external I/O)				
-					case (ThePinDesc(i+IOWidth)(7 downto 0)) is	--secondary pin function, drop MSB		
-						when DBSPIOutPin =>
-							LIOBits(i) <= DBSPIOut(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
-							report("Local DBSPIOutPin found at LIOBit " & integer'image(i));
-						when DBSPIClkPin =>
-							LIOBits(i) <= DBSPIClk(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)));				
-							report("Local DBSPClkPin found at LIOBit " & integer'image(i));
-						when DBSPIInPin =>		
-							DBSPIIn(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16))) <= LIOBits(i);
-							report("Local DBSPIInPin found at LIOBit " & integer'image(i));
-						when others => 
-							LIOBits(i) <= DBSPICS(conv_integer(ThePinDesc(i+IOWidth)(23 downto 16)))(conv_integer(ThePinDesc(i+IOWidth)(6 downto 0))-5);			
-							report("Local DBSPICSPin found at LIOBit " & integer'image(i));
-						-- magic foo, magic foo, what on earth does it do?						
-						-- (this needs to written more clearly!)							
-					end case;
-				end if;	
-			end loop;		
-		end process;	
+			end loop;
+		end process;		
 	end generate;
+
 
 	makesssimod:  if SSSIs >0  generate	
 	signal LoadSSSIData0: std_logic_vector(SSSIs -1 downto 0);
@@ -3143,8 +3087,10 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function
 						when PktUTDataPin =>
 							AltData(i) <= PktUTData(conv_integer(ThePinDesc(i)(23 downto 16)));				
-						when UTDrvEnPin =>
+						when PktUTDrvEnPin =>
 							AltData(i) <=  not PktUTDrvEn(conv_integer(ThePinDesc(i)(23 downto 16))); -- ExtIO is active low enable
+						when PktUTNDrvEnPin =>
+							AltData(i) <= PktUTDrvEn(conv_integer(ThePinDesc(i)(23 downto 16))); -- ExtIO is active low enable
 						when others => null;								
 					end case;
 				end if;
@@ -3160,9 +3106,12 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 						when PktUTDataPin =>
 							LIOBits(i) <= PktUTData(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16)));
 							report("Local PktUTDataPin found at LIOBit " & integer'image(i));	
-						when UTDrvEnPin =>
+						when PktUTDrvEnPin =>
 							LIOBits(i) <= PktUTDrvEn(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16))); --LIO is active high enable	
 							report("Local PktUTDrvEnPin found at LIOBit " & integer'image(i));
+						when PktUTNDrvEnPin =>
+							LIOBits(i) <= Not PktUTDrvEn(conv_integer(ThePinDesc(IOWidth+i)(23 downto 16))); --LIO is active high enable	
+							report("Local PktUTNDrvEnPin found at LIOBit " & integer'image(i));
 						when others => null;								
 					end case;
 				end if;
@@ -3962,15 +3911,15 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 	end generate;
 
 	makeoutmod:  if Outms >0  generate	
-	signal LoadOutMData: std_logic_vector(XfrmrOuts -1 downto 0);	
-	type  OutmType is array(OutMs-1 downto 0) of std_logic_vector(MaxXfrmrOutPins-1 downto 0);
+	signal LoadOutMData: std_logic_vector(OutMs -1 downto 0);	
+	type  OutmType is array(OutMs-1 downto 0) of std_logic_vector(MaxOutMPins-1 downto 0);
 	signal OutMOut: OutMType;
 	signal OutMDataSel: std_logic;	
 	begin
 		makeoutms: for i in 0 to OutMs -1 generate
 			aOutm: entity work.outm
 			generic map (
-							size => MaxXfrmrOutPins,
+							size => MaxOutMPins,
 							buswidth => 32)
 			port map ( 
 							clk => clklow,
@@ -4002,6 +3951,218 @@ constant UseStepgenProbe: boolean := PinExists(ThePinDesc,StepGenTag,StepGenProb
 			end loop;	
 		end process;
 	end generate;
+
+	MakeOneShotmod:  if OneShots > 0 generate	
+
+	signal LoadOSPW1: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSPW2: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSFilter1: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSFilter2: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSRate: std_logic_vector(OneShots -1 downto 0);
+	signal LoadOSControl: std_logic_vector(OneShots -1 downto 0);
+	signal ReadOSControl: std_logic_vector(OneShots -1 downto 0);
+	signal OSPulseOut1: std_logic_vector(OneShots -1 downto 0);
+	signal OSPulseOut2: std_logic_vector(OneShots -1 downto 0);
+	signal OSTrigger1: std_logic_vector(OneShots -1 downto 0);
+ 	signal OSTrigger2: std_logic_vector(OneShots -1 downto 0);
+	signal OSPW1Sel : std_logic;
+	signal OSPW2Sel : std_logic;
+	signal OSFilter1Sel : std_logic;
+	signal OSFilter2Sel : std_logic;
+	signal OSRateSel: std_logic;
+	signal OSControlSel: std_logic;	
+	
+	begin	
+	MakeOneShots : for i in 0 to OneShots-1 generate
+		oneshotx: entity work.oneshot
+		port map (
+		   clk => clklow,
+	      ibus => ibus,
+	      obus => obus,
+         loadpw1 => LoadOSPW1(i),
+         loadpw2 => LoadOSPW2(i),
+			loadfilter1 => LoadOSFilter1(i),	  
+			loadfilter2 => LoadOSFilter2(i),
+			loadrate => LoadOSRate(i),
+         loadcontrol => LoadOSControl(i),
+			readcontrol => ReadOSControl(i),		  
+			timers => RateSources,
+			pulse1out => OSPulseOut1(i),
+			pulse2out => OSPulseOut2(i),
+			hwtrigger1 => OSTrigger1(i),
+			hwtrigger2 => OSTrigger2(i)
+			);		
+		end generate;
+		
+		OneShotDecodeProcess : process (A,Readstb,writestb,OSPW1Sel, OSPW2Sel, 
+												  OSFilter1Sel,OSFilter2Sel, OSRateSel,OSControlSel)
+		begin
+			if A(15 downto 8) = OneShotPW1Addr then
+				OSPW1Sel <= '1';
+			else
+				OSPW1Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotPW2Addr then
+				OSPW2Sel <= '1';
+			else
+				OSPW2Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotFilter1Addr then
+				OSFilter1Sel <= '1';
+			else
+				OSFilter1Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotFilter2Addr then
+				OSFilter2Sel <= '1';
+			else
+				OSFilter2Sel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotRateAddr then
+				OSRateSel <= '1';
+			else
+				OSRateSel <= '0';
+			end if;
+			if A(15 downto 8) = OneShotControlAddr then
+				OSControlSel <= '1';
+			else
+				OSControlSel <= '0';
+			end if;
+			
+			LoadOSPW1 <= OneOfNDecode(OneShots,OSPW1Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSPW2 <= OneOfNDecode(OneShots,OSPW2Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSFilter1 <= OneOfNDecode(OneShots,OSFilter1Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSFilter2 <= OneOfNDecode(OneShots,OSFilter2Sel,writestb,A(7 downto 2)); -- 64 max
+			LoadOSRate <= OneOfNDecode(OneShots,OSRateSel,writestb,A(7 downto 2));
+			LoadOSControl <= OneOfNDecode(OneShots,OSControlSel,writestb,A(7 downto 2));
+			ReadOSControl <= OneOfNDecode(OneShots,OSControlSel,readstb,A(7 downto 2));
+		end process OneShotDecodeProcess;
+		
+		DoOneShotPins: process(OSPulseOut1,OSPulseOut2,iobits)
+		begin	
+			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
+				if ThePinDesc(i)(15 downto 8) = OneShotTag then											
+					case (ThePinDesc(i)(7 downto 0)) is	--secondary pin function
+						when OneShotOut1Pin =>
+							AltData(i) <= OSPulseOut1(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotOut2Pin =>
+							AltData(i) <= OSPulseOut2(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotTrig1Pin =>
+							OSTrigger1(conv_integer(ThePinDesc(i)(23 downto 16))) <= iobits(i); 
+						when OneShotTrig2Pin =>
+							OSTrigger2(conv_integer(ThePinDesc(i)(23 downto 16))) <= iobits(i); 
+						when others => null;
+					end case;
+				end if;
+			end loop;
+		end process;	
+	
+		DoLocalOneShotPins: process(OSPulseOut1,OSPulseOut2,LIObits)
+		begin	
+			for i in 0 to LIOWidth -1 loop				-- loop through all the external I/O pins 
+				if ThePinDesc(i+IOWidth)(15 downto 8) = OneShotTag then											
+					case (ThePinDesc(i+IOWidth)(7 downto 0)) is	--secondary pin function
+						when OneShotOut1Pin =>
+							LIOBits(i) <= OSPulseOut1(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotOut2Pin =>
+							LIOBits(i) <= OSPulseOut2(conv_integer(ThePinDesc(i)(23 downto 16)));
+						when OneShotTrig1Pin =>
+							OSTrigger1(conv_integer(ThePinDesc(i)(23 downto 16))) <= LIOBits(i); 
+						when OneShotTrig2Pin =>
+							OSTrigger2(conv_integer(ThePinDesc(i)(23 downto 16))) <= LIOBits(i); 
+						when others => null;
+					end case;
+				end if;
+			end loop;
+		end process;	
+		
+	end generate MakeOneShotMod;
+
+	MakePeriodmod:  if PeriodMs > 0 generate	
+
+	signal LoadPMMode: std_logic_vector(PeriodMs -1 downto 0);
+	signal LoadPMLimit: std_logic_vector(PeriodMs -1 downto 0);
+	signal ReadPMMode: std_logic_vector(PeriodMs -1 downto 0);
+	signal ReadPMLimit: std_logic_vector(PeriodMs -1 downto 0);
+	signal ReadPMPeriod: std_logic_vector(PeriodMs -1 downto 0);
+	signal ReadPMWidth: std_logic_vector(PeriodMs -1 downto 0);
+	signal PMModeSel: std_logic;
+	signal PMLimitSel: std_logic;
+	signal PMPeriodSel: std_logic;
+	signal PMWidthSel: std_logic;
+	signal PMInput: std_logic_vector(PeriodMs -1 downto 0);
+
+	begin	
+	MakePeriodMs : for i in 0 to PeriodMs-1 generate
+		periodmx: entity work.periodm
+		port map (
+		   clk => clklow,
+	      ibus => ibus,
+	      obus => obus,
+         loadmode => LoadPMMode(i),
+         readmode => ReadPMMode(i),
+			loadlimit => LoadPMLimit(i),	  
+			readlimit => ReadPMLimit(i),	  
+			readperiod => ReadPMPeriod(i),
+			readwidth => ReadPMWidth(i),
+			input => PMInput(i)
+			);		
+		end generate;
+		
+		PMDecodeProcess : process (A,Readstb,writestb,PMModeSel,
+											PMLimitSel,PMPeriodSel,PMWidthSel)
+		begin
+			if A(15 downto 8) = PeriodMModeAddr then
+				PMModeSel <= '1';
+			else
+				PMModeSel <= '0';
+			end if;
+			if A(15 downto 8) = PeriodMLimitAddr then
+				PMLimitSel <= '1';
+			else
+				PMLimitSel <= '0';
+			end if;
+			if A(15 downto 8) = PeriodMPeriodAddr then
+				PMPeriodSel <= '1';
+			else
+				PMPeriodSel <= '0';
+			end if;
+			if A(15 downto 8) = PeriodMWidthAddr then
+				PMWidthSel <= '1';
+			else
+				PMWidthSel<= '0';
+			end if;
+			
+			LoadPMMode <= OneOfNDecode(PeriodMs,PMModeSel,writestb,A(7 downto 2)); -- 64 max
+			LoadPMLimit <= OneOfNDecode(PeriodMs,PMLimitSel,writestb,A(7 downto 2)); -- 64 max
+			ReadPMMode <= OneOfNDecode(PeriodMs,PMModeSel,readstb,A(7 downto 2));
+			ReadPMLimit <= OneOfNDecode(PeriodMs,PMLimitSel,readstb,A(7 downto 2));
+			ReadPMPeriod <= OneOfNDecode(PeriodMs,PMPeriodSel,readstb,A(7 downto 2));
+			ReadPMWidth <= OneOfNDecode(PeriodMs,PMWidthSel,readstb,A(7 downto 2));
+		end process PMDecodeProcess;
+		
+		DoPMPins: process(iobits)
+		begin	
+			for i in 0 to IOWidth -1 loop				-- loop through all the external I/O pins 
+				if ThePinDesc(i)(15 downto 8) = PeriodMTag then											
+					if(ThePinDesc(i)(7 downto 0)) = PeriodMInputPin then
+						PMInput(conv_integer(ThePinDesc(i)(23 downto 16))) <= iobits(i); 
+					end if;
+				end if;
+			end loop;
+		end process;	
+	
+		DoLocalPMPins: process(LIObits)
+		begin	
+			for i in 0 to LIOWidth -1 loop				-- loop through all the external I/O pins 
+				if ThePinDesc(i)(15 downto 8) = PeriodMTag then											
+					if(ThePinDesc(i)(7 downto 0)) = PeriodMInputPin then
+						PMInput(conv_integer(ThePinDesc(i)(23 downto 16))) <= LIObits(i); 
+					end if;
+				end if;
+			end loop;
+		end process;	
+		
+	end generate MakePeriodMod;
 
 	makewavegenmod:  if WaveGens >0  generate	
 	signal LoadWaveGenRate: std_logic_vector(WaveGens -1 downto 0);
